@@ -82,6 +82,30 @@ parameters = {
 }
 
 
+parameters2 = {
+	'ContextMeasure': 'FGA',
+	'LastNGames': 0,
+	'LeagueID': '00',
+	'Month': 0,
+	'OpponentTeamID': 0,
+	'Period': 0,
+	'PlayerID': 0,
+	'SeasonType': 'Playoffs',
+	'TeamID': 0,
+	'VsDivision': '',
+	'VsConference': '',
+	'SeasonSegment': '',
+	'Season': '2018-19',
+	'RookieYear': '',
+	'PlayerPosition': '',
+	'Outcome': '',
+	'Location': '',
+	'GameSegment': '',
+	'GameId': '',
+	'DateTo': '',
+	'DateFrom': ''
+}
+
 response = requests.get(url_base, params=parameters, headers=headers)
 content = json.loads(response.content)
 
@@ -97,6 +121,7 @@ df.shape
 # write to csv file
 df.to_csv('C:/Users/ewong/Documents/GitHub/nba_shot_charts/nba_shotchartdetail_2018-191.csv', index=False)
 
-
+response2 = requests.get(url_base, params=parameters2, headers=headers)
+content2 = json.loads(response2.content)
 
 
