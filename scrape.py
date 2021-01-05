@@ -1,7 +1,7 @@
 # largely borrowing from 
 # https://datavizardry.com/2020/01/28/nba-shot-charts-part-1/
 
-from nba_api.stats.endpoints import shotchartdetail
+# from nba_api.stats.endpoints import shotchartdetail
 import simplejson as json
 import pandas as pd
 import requests
@@ -45,7 +45,7 @@ import requests
 
 url_base = 'https://stats.nba.com/stats/shotchartdetail'
 
-headers = {
+headers_data = {
 		'Host': 'stats.nba.com',
 		'Connection': 'keep-alive',
 		'Accept': 'application/json, text/plain, */*',
@@ -106,7 +106,7 @@ parameters2 = {
 	'DateFrom': ''
 }
 
-response = requests.get(url_base, params=parameters, headers=headers)
+response = requests.get(url_base, params=parameters, headers=headers_data)
 content = json.loads(response.content)
 
 
@@ -119,9 +119,17 @@ df.columns = headers
 df.shape
 
 # write to csv file
-df.to_csv('C:/Users/ewong/Documents/GitHub/nba_shot_charts/nba_shotchartdetail_2018-191.csv', index=False)
-
-response2 = requests.get(url_base, params=parameters2, headers=headers)
-content2 = json.loads(response2.content)
+df.to_csv('C:/Users/ewong/Documents/GitHub/nba_shot_charts/my_nba_shotchartdetail_2018-19.csv', index=False)
 
 
+response_post = requests.get(url_base, params=parameters2, headers=headers_data)
+content_post = json.loads(response_post.content)
+
+results_post = content_post['resultSets'][0]
+headers_post = results_post['headers']
+rows_post = results_post['rowSet']
+df_post = pd.DataFrame(rows_post)
+df_post.columns = headers_post
+df_post.shape
+
+df_post.to_csv('C:/Users/ewong/Documents/GitHub/nba_shot_charts/nba_shotchartdetail_2018-19_postseason.csv', index=False)
