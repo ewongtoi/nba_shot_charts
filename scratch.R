@@ -40,6 +40,8 @@ shots$SHOT_MADE_FLAG
 # basic seems to be the one that's more useful
 ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_BASIC)) + geom_point()
 ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_AREA)) + geom_point()
+ggplot(data=sample_n(rezoned_shots, 1000), aes(x=LOC_X, y=LOC_Y, color=zone)) + geom_point()
+
 
 list_shots <- shots %>% 
   select(PLAYER_NAME, PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, SHOT_ZONE_BASIC) %>% 
@@ -49,34 +51,48 @@ shots %>% filter(PLAYER_ID==101106) %>%
   select(PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, SHOT_ZONE_BASIC) %>% 
   tabyl(SHOT_ZONE_BASIC, SHOT_MADE_FLAG, PLAYER_ID, show_missing_levels = TRUE)
 
-  
+
+rezoned_shots <- shots %>% 
+  mutate(zone = ifelse(SHOT_ZONE_BASIC %in% c("In The Paint (Non-RA)", "Restricted Area"), 
+                       SHOT_ZONE_BASIC, 
+                       paste(SHOT_ZONE_BASIC, SHOT_ZONE_AREA)))
+
+list_rezoned_shots <- rezoned_shots %>% 
+  select(PLAYER_NAME, PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, zone) %>% 
+  tabyl(zone, SHOT_MADE_FLAG, PLAYER_ID, show_missing_levels = TRUE)
+
 # function to transform the list items into useful rows
 list_item_to_row <- function(lll){
   
-  fgm <- lll[,2]
-  fga <- lll[,3]
+  fgmake <- lll[,2]
+  fgmiss <- lll[,3]
   
-  pctg <- fgm / (fgm + fga)
+  pctg <- fgmake / (fgmake + fgmiss)
   
-  rrr <- data.frame(t(c(fgm, pctg)))
+  fga <- fgmake + fgmiss
+  
+  rrr <- data.frame(t(c(fga, pctg)))
   
   rrr[is.na(rrr)] <- 0
   
-  colnames(rrr) <- c("Above Break 3 Made", "BC Made", "Paint (non-RA) Made", 
-                     "LC3 Made", "MR Made", "RA Made", "RC3 Made",
-                     "Above Break 3 pct", "BC pct", "Paint (non-RA) pct", 
-                     "LC3 pct", "MR pct", "RA pct", "RC3 pct")
+  zone_names <- c("ab3bc", 
+                  "ab3c", "ab3lc", "ab3rc", 
+                  "bcbc", 
+                  "paint", 
+                  "lc3", 
+                  "mrc", "mrlc", "mrl", "mrrc", "mrr", 
+                  "ra", 
+                  "rc3")
+  
+  cnms <- c(paste(zone_names, "attempt"), paste(zone_names, "pct"))
+  
+  colnames(rrr) <- cnms
   
   return(rrr)
 }
 
-makes_pcts <-  map_dfr(list_shots, list_item_to_row)
-
-list_item_to_row(list_shots[[1]])
-list_shots[[1]]
-list_shots[1]
-shots$PLAYER_ID[1]
-list_shots[2]
+attempts_pcts <-  map_dfr(list_shots, list_item_to_row)
+attempts_pcts_rz <-  map_dfr(list_rezoned_shots, list_item_to_row)
 
 names(list_shots) == sort(names(list_shots))
 
@@ -85,4 +101,11 @@ sort(as.character(unique(shots$PLAYER_ID))) == names(list_shots)
 
 player_inf <- shots %>% select(PLAYER_NAME, PLAYER_ID) %>% distinct() %>% arrange(as.character(PLAYER_ID))
 
-wide_shots <- bind_cols(player_inf, makes_pcts)
+wide_shots <- bind_cols(player_inf, attempts_pcts)
+
+wide_rezoned_shots <- bind_cols(player_inf, attempts_pcts_rz)
+names(wide_shots)      
+
+View(wide_shots)
+names(wide_rezoned_shots)
+View(wide_rezoned_shots)
