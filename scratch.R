@@ -4,6 +4,8 @@ library(ggplot2)
 library(nimble)
 library(reshape2)
 library(janitor)
+library(visdat)
+
 
 shots <- read_csv("my_nba_shotchartdetail_2018-19.csv")
 shots
@@ -40,7 +42,7 @@ shots$SHOT_MADE_FLAG
 # basic seems to be the one that's more useful
 ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_BASIC)) + geom_point()
 ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_AREA)) + geom_point()
-ggplot(data=sample_n(rezoned_shots, 1000), aes(x=LOC_X, y=LOC_Y, color=zone)) + geom_point()
+ggplot(data=sample_n(rezoned_shots, 4000), aes(x=LOC_X, y=LOC_Y, color=zone)) + geom_point()
 
 
 list_shots <- shots %>% 
@@ -104,8 +106,37 @@ player_inf <- shots %>% select(PLAYER_NAME, PLAYER_ID) %>% distinct() %>% arrang
 wide_shots <- bind_cols(player_inf, attempts_pcts)
 
 wide_rezoned_shots <- bind_cols(player_inf, attempts_pcts_rz)
+
+wide_rezoned_shots$total_attempts <- wide_rezoned_shots %>% 
+  select(ends_with("attempt")) %>% 
+  rowSums() 
+
+wide_rezoned_shots <- wide_rezoned_shots %>% 
+  select(!ends_with(c("bc attempt", "bc pct")))
+
 names(wide_shots)      
 
 View(wide_shots)
 names(wide_rezoned_shots)
 View(wide_rezoned_shots)
+
+
+wide_rezoned_shots %>% select(ends_with("attempt")) %>% na_if(0) %>% vis_miss()
+twoplus_each <- sum(!is.na(wide_rezoned_shots %>%
+             select(ends_with("attempt")) %>% 
+             na_if(0) %>% 
+             na_if(1) %>% na_if(2) %>% 
+             rowSums()))
+
+
+twoplus_each - wide_rezoned_shots %>%
+  select(contains("attempt")) %>% 
+  na_if(0) %>% 
+  na_if(1) %>% na_if(2) %>% 
+  filter(total_attempts > 250) %>% 
+  select(!total_attempts) %>% 
+  rowSums() %>% 
+  is.na() %>% 
+  sum()
+
+wide_rezoned_shots$total_attempts
