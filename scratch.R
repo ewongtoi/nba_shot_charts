@@ -5,7 +5,9 @@ library(nimble)
 library(reshape2)
 library(janitor)
 library(visdat)
+library(useful)
 
+# load data ---------------------------------------------------------------
 
 shots <- read_csv("my_nba_shotchartdetail_2018-19.csv")
 shots
@@ -38,12 +40,6 @@ head(shots)
 names(shots)
 shots$SHOT_MADE_FLAG
 
-# see regions based on SHOT_ZONE_BASIC/SHOT_ZONE_AREA
-# basic seems to be the one that's more useful
-ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_BASIC)) + geom_point()
-ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_AREA)) + geom_point()
-ggplot(data=sample_n(rezoned_shots, 4000), aes(x=LOC_X, y=LOC_Y, color=zone)) + geom_point()
-
 
 list_shots <- shots %>% 
   select(PLAYER_NAME, PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, SHOT_ZONE_BASIC) %>% 
@@ -58,6 +54,15 @@ rezoned_shots <- shots %>%
   mutate(zone = ifelse(SHOT_ZONE_BASIC %in% c("In The Paint (Non-RA)", "Restricted Area"), 
                        SHOT_ZONE_BASIC, 
                        paste(SHOT_ZONE_BASIC, SHOT_ZONE_AREA)))
+
+
+# visualize zones ---------------------------------------------------------
+
+# see regions based on SHOT_ZONE_BASIC/SHOT_ZONE_AREA
+# basic seems to be the one that's more useful
+ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_BASIC)) + geom_point()
+ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_AREA)) + geom_point()
+ggplot(data=sample_n(rezoned_shots, 4000), aes(x=LOC_X, y=LOC_Y, color=zone)) + geom_point()
 
 list_rezoned_shots <- rezoned_shots %>% 
   select(PLAYER_NAME, PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, zone) %>% 
@@ -99,9 +104,13 @@ attempts_pcts_rz <-  map_dfr(list_rezoned_shots, list_item_to_row)
 names(list_shots) == sort(names(list_shots))
 
 
-sort(as.character(unique(shots$PLAYER_ID))) == names(list_shots)
+sort(as.character(unique(shots$PLAYER_ID))) == names(list_rezoned_shots)
 
-player_inf <- shots %>% select(PLAYER_NAME, PLAYER_ID) %>% distinct() %>% arrange(as.character(PLAYER_ID))
+# player info to be merged with summarized shot data
+player_inf <- shots %>% 
+  select(PLAYER_NAME, PLAYER_ID) %>% 
+  distinct() %>% 
+  arrange(as.character(PLAYER_ID))
 
 wide_shots <- bind_cols(player_inf, attempts_pcts)
 
@@ -140,3 +149,18 @@ twoplus_each - wide_rezoned_shots %>%
   sum()
 
 wide_rezoned_shots$total_attempts
+
+
+# find zone centers -------------------------------------------------------
+cart_zone_ctrs <- rezoned_shots %>% 
+  group_by(zone) %>% 
+  summarize(mean_x = mean(LOC_X), 
+            mean_y = mean(LOC_Y))
+cart_zone_ctrs$zone
+polar_zone_ctrs <- cart2pol(cart_zone_ctrs$mean_x, cart_zone_ctrs$mean_y) %>% 
+  bind_cols(cart_zone_ctrs$zone) %>% 
+  rename(zone = 5) 
+
+
+relevant_ctrs <- polar_zone_ctrs %>% 
+  filter(!str_detect(zone, "(BC)"))
