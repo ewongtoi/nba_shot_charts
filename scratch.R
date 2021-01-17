@@ -6,6 +6,9 @@ library(reshape2)
 library(janitor)
 library(visdat)
 library(useful)
+library(splines)
+library(multisensi)
+library(stringi)
 
 # load data ---------------------------------------------------------------
 
@@ -164,3 +167,26 @@ polar_zone_ctrs <- cart2pol(cart_zone_ctrs$mean_x, cart_zone_ctrs$mean_y) %>%
 
 relevant_ctrs <- polar_zone_ctrs %>% 
   filter(!str_detect(zone, "(BC)"))
+
+
+# bspline -----------------------------------------------------------------
+
+# use bs() function
+
+# attempts_pcts <-  map_dfr(list_shots, list_item_to_row)
+
+relevant_ctrs %>% select(r, theta) %>% basis.bsplines(basis.args = list(knots=3, mdegree=3))
+
+cbind(c(1, 2, 3), c(43, 5, 2)) %>% bs()
+
+wide_rezoned_shots_nobc %>% select(contains("attempt")) %>% names()
+
+wide_rezoned_shots_nobc <- wide_rezoned_shots %>% 
+  select(!contains("bc")) %>% 
+  filter_at((vars(ends_with("attempt"))), all_vars(. > 4))
+
+head(wide_rezoned_shots_nobc)
+class(wide_rezoned_shots_nobc)
+
+"Timothe Luwawu-Cabarrot" %in% wide_rezoned_shots$PLAYER_NAME
+
