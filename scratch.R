@@ -9,6 +9,8 @@ library(useful)
 library(splines)
 library(multisensi)
 library(stringi)
+library(fda)
+library(here)
 
 # load data ---------------------------------------------------------------
 
@@ -22,35 +24,13 @@ post_shots <- read_csv("nba_shotchartdetail_2018-19_postseason.csv")
 View(shots)
 
 
-n_players <- shots %>% select(PLAYER_NAME) %>% n_distinct()
-
-ggplot(data=shots, aes(x=SHOT_DISTANCE)) + geom_bar()
-
-summary(shots)
-
-dim(shots)
-table(shots$SHOT_ZONE_BASIC)
-
-unique(shots$TEAM_ID)
-
-shots %>% filter(PLAYER_NAME=="James Harden")
-
-
-n_players
-
-
-head(shots)
-names(shots)
-shots$SHOT_MADE_FLAG
+n_players <- shots %>% dplyr::select(PLAYER_NAME) %>% n_distinct()
 
 
 list_shots <- shots %>% 
-  select(PLAYER_NAME, PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, SHOT_ZONE_BASIC) %>% 
+  dplyr::select(PLAYER_NAME, PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, SHOT_ZONE_BASIC) %>% 
   tabyl(SHOT_ZONE_BASIC, SHOT_MADE_FLAG, PLAYER_ID, show_missing_levels = TRUE)
 
-shots %>% filter(PLAYER_ID==101106) %>% 
-  select(PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, SHOT_ZONE_BASIC) %>% 
-  tabyl(SHOT_ZONE_BASIC, SHOT_MADE_FLAG, PLAYER_ID, show_missing_levels = TRUE)
 
 
 rezoned_shots <- shots %>% 
@@ -68,7 +48,7 @@ ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_AREA))
 ggplot(data=sample_n(rezoned_shots, 4000), aes(x=LOC_X, y=LOC_Y, color=zone)) + geom_point()
 
 list_rezoned_shots <- rezoned_shots %>% 
-  select(PLAYER_NAME, PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, zone) %>% 
+  dplyr::select(PLAYER_NAME, PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, zone) %>% 
   tabyl(zone, SHOT_MADE_FLAG, PLAYER_ID, show_missing_levels = TRUE)
 
 # function to transform the list items into useful rows
@@ -101,36 +81,30 @@ list_item_to_row <- function(lll){
   return(rrr)
 }
 
-attempts_pcts <-  map_dfr(list_shots, list_item_to_row)
+# attempts_pcts <-  map_dfr(list_shots, list_item_to_row)
 attempts_pcts_rz <-  map_dfr(list_rezoned_shots, list_item_to_row)
 
-names(list_shots) == sort(names(list_shots))
+# names(list_shots) == sort(names(list_shots))
 
 
-sort(as.character(unique(shots$PLAYER_ID))) == names(list_rezoned_shots)
+# sort(as.character(unique(shots$PLAYER_ID))) == names(list_rezoned_shots)
 
 # player info to be merged with summarized shot data
 player_inf <- shots %>% 
-  select(PLAYER_NAME, PLAYER_ID) %>% 
+  dplyr::select(PLAYER_NAME, PLAYER_ID) %>% 
   distinct() %>% 
   arrange(as.character(PLAYER_ID))
 
-wide_shots <- bind_cols(player_inf, attempts_pcts)
+# wide_shots <- bind_cols(player_inf, attempts_pcts)
 
 wide_rezoned_shots <- bind_cols(player_inf, attempts_pcts_rz)
 
 wide_rezoned_shots$total_attempts <- wide_rezoned_shots %>% 
-  select(ends_with("attempt")) %>% 
+  dplyr::select(ends_with("attempt")) %>% 
   rowSums() 
 
 wide_rezoned_shots <- wide_rezoned_shots %>% 
-  select(!ends_with(c("bc attempt", "bc pct")))
-
-names(wide_shots)      
-
-View(wide_shots)
-names(wide_rezoned_shots)
-View(wide_rezoned_shots)
+  dplyr::select(!ends_with(c("bc attempt", "bc pct")))
 
 
 wide_rezoned_shots %>% select(ends_with("attempt")) %>% na_if(0) %>% vis_miss()
@@ -159,7 +133,8 @@ cart_zone_ctrs <- rezoned_shots %>%
   group_by(zone) %>% 
   summarize(mean_x = mean(LOC_X), 
             mean_y = mean(LOC_Y))
-cart_zone_ctrs$zone
+
+
 polar_zone_ctrs <- cart2pol(cart_zone_ctrs$mean_x, cart_zone_ctrs$mean_y) %>% 
   bind_cols(cart_zone_ctrs$zone) %>% 
   rename(zone = 5) 
@@ -175,18 +150,56 @@ relevant_ctrs <- polar_zone_ctrs %>%
 
 # attempts_pcts <-  map_dfr(list_shots, list_item_to_row)
 
-relevant_ctrs %>% select(r, theta) %>% basis.bsplines(basis.args = list(knots=3, mdegree=3))
+relevant_ctrs %>% dplyr::select(r, theta) 
 
 cbind(c(1, 2, 3), c(43, 5, 2)) %>% bs()
 
-wide_rezoned_shots_nobc %>% select(contains("attempt")) %>% names()
+
 
 wide_rezoned_shots_nobc <- wide_rezoned_shots %>% 
-  select(!contains("bc")) %>% 
-  filter_at((vars(ends_with("attempt"))), all_vars(. > 4))
+  dplyr::select(!contains("bc")) %>% 
+  filter_at((vars(ends_with("attempt"))), all_vars(. > 3)) 
 
-head(wide_rezoned_shots_nobc)
-class(wide_rezoned_shots_nobc)
+dim(wide_rezoned_shots_nobc)
 
 "Timothe Luwawu-Cabarrot" %in% wide_rezoned_shots$PLAYER_NAME
 
+
+joined_inf <- readRDS(here("salary_plus"))
+
+
+joined_shots <- left_join(wide_rezoned_shots_nobc, joined_inf, 
+          by = c("PLAYER_NAME" = "Player")) %>% 
+  drop_na()
+
+
+curry_atts <- joined_shots %>% 
+  filter(PLAYER_NAME == "Seth Curry") %>% 
+  dplyr::select(ends_with("pct")) %>% 
+  t()
+
+dim(relevant_ctrs %>% dplyr::select(r, theta) )
+
+plot(y=residuals(lm(curry_atts ~ bs(relevant_ctrs$r) + bs(relevant_ctrs$theta) )), 
+     x=lm(curry_atts ~ bs(relevant_ctrs$r) + bs(relevant_ctrs$theta) )$fitted.values)
+curry_atts
+
+fit_mu <- function(player_row){
+  player_atts <- dplyr::select(player_row, ends_with("attempt")) %>% t()
+  
+  
+  mu <- lm(player_atts ~ bs(relevant_ctrs$r) + bs(relevant_ctrs$theta))$fitted.values
+  return(mu)
+}
+
+fit_phi <- function(player_row){
+  player_pcts <- dplyr::select(player_row, ends_with("pct")) %>% t()
+  
+  
+  phi <- lm(player_pcts ~ bs(relevant_ctrs$r) + bs(relevant_ctrs$theta))$fitted.values
+  return(phi)
+}
+
+fit_phi(wide_rezoned_shots_nobc[1,])
+mu_ests <- joined_shots %>% rowwise() %>% fit_mu()
+phi_ests <- joined_shots %>% rowwise() %>% fit_phi()
