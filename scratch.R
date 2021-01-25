@@ -203,3 +203,9 @@ fit_phi <- function(player_row){
 fit_phi(wide_rezoned_shots_nobc[1,])
 mu_ests <- joined_shots %>% rowwise() %>% fit_mu()
 phi_ests <- joined_shots %>% rowwise() %>% fit_phi()
+
+
+saveRDS(joined_shots, here("joined_shots"))
+saveRDS(wide_rezoned_shots_nobc, here("wide_rezoned_nobc"))
+saveRDS(mu_ests, here("mu_ests"))
+saveRDS(phi_ests, here("phi_ests"))
