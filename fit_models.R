@@ -40,34 +40,35 @@ player_beta <- rep(0, times=4)
 Y <- load_shots %>% dplyr::select(ends_with("attempt"))
 Z <- load_shots %>% dplyr::select(ends_with("pct"))
 
-id_7 = diag(100, 7)
-id_nz = diag(100, n_zones)
+id_7 = diag(10, 7)
+id_nz = diag(10, n_zones)
 zero_7 <- rep(0, times=7)
 zero_12 <- rep(0, times=12)
 
-id_7 <- diag(7)
-id_nz <- diag(n_zones)
-zero_7 <- rep(0, times=7)
-zero_nz <- rep(0, times=n_zones)
+#id_7 <- diag(7)
+#id_nz <- diag(n_zones)
+#zero_7 <- rep(0, times=7)
+#zero_nz <- rep(0, times=n_zones)
 
 shots_code <- nimbleCode({
 
-  player_alph[1:4] ~ dmnorm(zero_7[1:4], cov=id_7[1:4,1:4])
-  player_beta[1:4] ~ dmnorm(zero_7[1:4], cov=id_7[1:4,1:4])
+  player_alph[1:4] ~ dmnorm(mean=zero_7[1:4], cov=id_7[1:4,1:4])
+  player_beta[1:4] ~ dmnorm(mean=zero_7[1:4], cov=id_7[1:4,1:4])
   
   for(player in 1:n_players){
     # prior
-    betas[player, 1:7] ~ dmnorm(zero_7[1:7], cov=id_7[1:7,1:7])
-    alphas[player, 1:7] ~ dmnorm(zero_7[1:7], cov=id_7[1:7,1:7])
-    scale_eff[player, 1] ~ dnorm(0, 100)
+    betas[player, 1:7] ~ dmnorm(mean=zero_7[1:7], cov=id_7[1:7,1:7])
+    alphas[player, 1:7] ~ dmnorm(mean=zero_7[1:7], cov=id_7[1:7,1:7])
+    scale_eff[player, 1] ~ dnorm(mean=0, sd=10)
+    sigma[1:n_zones, 1:n_zones] ~ dinvwish(S = id_nz[1:n_zones, 1:n_zones], df=15)
     
     
-    omega[player, 1:n_zones] ~ dmnorm(zero_nz[1:n_zones], cov=id_nz[1:n_zones,1:n_zones])
+    omega[player, 1:n_zones] ~ dmnorm(mean=zero_nz[1:n_zones], cov=sigma[1:n_zones,1:n_zones])
 
     
   
     m_mean[1:n_zones, player] <- design_shooting[1:n_zones, 1:7] %*% betas[player, 1:7] 
-    mu[player, 1:n_zones] ~ dmnorm(m_mean[1:n_zones, 1], id_nz[1:n_zones, 1:n_zones])
+    mu[player, 1:n_zones] ~ dmnorm(mean=m_mean[1:n_zones, 1], cov=id_nz[1:n_zones, 1:n_zones])
     
     rate_adj <- (player_mat[player, 1:4]%*%player_beta[1:4])[1,1]  
     
@@ -81,7 +82,7 @@ shots_code <- nimbleCode({
     }
 
     e_mean[1:n_zones, player] <- design_shooting[1:n_zones, 1:7] %*% alphas[player, 1:7] 
-    eta[player, 1:n_zones] ~ dmnorm(e_mean[1:n_zones, 1], id_nz[1:n_zones, 1:n_zones])
+    eta[player, 1:n_zones] ~ dmnorm(e_mean[1:n_zones, 1], cov=id_nz[1:n_zones, 1:n_zones])
     mean_adj <- (player_mat[player, 1:4]%*%player_alph[1:4])[1,1]  
     
     for(pct in 1:n_zones){
@@ -124,7 +125,7 @@ shots_model <- nimbleModel(shots_code,
                            debug=FALSE)
  
 shots_mcmc <- buildMCMC(shots_model)
-mcmc.out10 <- nimbleMCMC(code = shots_code, constants = constants,
+mcmc.outiw10 <- nimbleMCMC(code = shots_code, constants = constants,
                        data = data, inits = inits,
                        nchains = 2, niter = 10000,
                        summary = TRUE, WAIC = TRUE,
@@ -158,7 +159,9 @@ View(mcmcout_median_ab)
 mcmcout_tib
 as.numeric(str_extract("[23,", "(?<=\\[)(.*?)(?=,)"))
 
-write.csv(mcmcout_median_ab, "mcmc_medians_ab.csv")
+plot(mcmc.outiw$samples$chain1[1:10000, 180])
+
+write.csv(mcmcout_median_ab2, "mcmc_medians_ab2.csv")
 # unsure if this works (paralllel) ----------------------------------------
 
 
