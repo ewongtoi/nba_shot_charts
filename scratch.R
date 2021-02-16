@@ -43,8 +43,8 @@ rezoned_shots <- shots %>%
 
 # see regions based on SHOT_ZONE_BASIC/SHOT_ZONE_AREA
 # basic seems to be the one that's more useful
-ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_BASIC)) + geom_point()
-ggplot(data=sample_n(shots, 10000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_AREA)) + geom_point()
+ggplot(data=sample_n(shots, 1000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_BASIC)) + geom_point()
+ggplot(data=sample_n(shots, 1000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_AREA)) + geom_point()
 ggplot(data=sample_n(rezoned_shots, 4000), aes(x=LOC_X, y=LOC_Y, color=zone)) + geom_point()
 
 list_rezoned_shots <- rezoned_shots %>% 
@@ -54,8 +54,8 @@ list_rezoned_shots <- rezoned_shots %>%
 # function to transform the list items into useful rows
 list_item_to_row <- function(lll){
   
-  fgmake <- lll[,2]
-  fgmiss <- lll[,3]
+  fgmake <- lll[,3]
+  fgmiss <- lll[,2]
   
   pctg <- fgmake / (fgmake + fgmiss)
   
@@ -107,9 +107,9 @@ wide_rezoned_shots <- wide_rezoned_shots %>%
   dplyr::select(!ends_with(c("bc attempt", "bc pct")))
 
 
-wide_rezoned_shots %>% select(ends_with("attempt")) %>% na_if(0) %>% vis_miss()
+wide_rezoned_shots %>% dplyr::select(ends_with("attempt")) %>% na_if(0) %>% vis_miss()
 twoplus_each <- sum(!is.na(wide_rezoned_shots %>%
-             select(ends_with("attempt")) %>% 
+             dplyr::select(ends_with("attempt")) %>% 
              na_if(0) %>% 
              na_if(1) %>% na_if(2) %>% 
              rowSums()))
@@ -170,7 +170,17 @@ joined_inf <- readRDS(here("salary_plus"))
 
 joined_shots <- left_join(wide_rezoned_shots_nobc, joined_inf, 
           by = c("PLAYER_NAME" = "Player")) %>% 
-  drop_na()
+  drop_na() %>% 
+  group_by(PLAYER_NAME) %>% 
+  slice(1) %>% 
+  ungroup()
+
+joined_shots_full <- left_join(wide_rezoned_shots, joined_inf, 
+                          by = c("PLAYER_NAME" = "Player")) %>% 
+  drop_na() %>% 
+  group_by(PLAYER_NAME) %>% 
+  slice(1) %>% 
+  ungroup()
 
 
 curry_atts <- joined_shots %>% 
@@ -184,28 +194,53 @@ plot(y=residuals(lm(curry_atts ~ bs(relevant_ctrs$r) + bs(relevant_ctrs$theta) )
      x=lm(curry_atts ~ bs(relevant_ctrs$r) + bs(relevant_ctrs$theta) )$fitted.values)
 curry_atts
 
+design_shooting <- cbind(1, bs(relevant_ctrs$r), bs(relevant_ctrs$theta))
+
 fit_mu <- function(player_row){
   player_atts <- dplyr::select(player_row, ends_with("attempt")) %>% t()
   
   
   mu <- lm(player_atts ~ bs(relevant_ctrs$r) + bs(relevant_ctrs$theta))$fitted.values
-  return(mu)
+  return(t(mu))
 }
 
-fit_phi <- function(player_row){
+fit_eta <- function(player_row){
   player_pcts <- dplyr::select(player_row, ends_with("pct")) %>% t()
   
   
   phi <- lm(player_pcts ~ bs(relevant_ctrs$r) + bs(relevant_ctrs$theta))$fitted.values
-  return(phi)
+  return(t(phi))
 }
 
 fit_phi(wide_rezoned_shots_nobc[1,])
-mu_ests <- joined_shots %>% rowwise() %>% fit_mu()
-phi_ests <- joined_shots %>% rowwise() %>% fit_phi()
 
+mu_ests <- joined_shots %>% 
+  rowwise() %>% 
+  fit_mu() %>% 
+  as_tibble() %>% 
+  add_column(PLAYER_NAME = joined_shots$PLAYER_NAME) %>% 
+  relocate(PLAYER_NAME)
 
-saveRDS(joined_shots, here("joined_shots"))
-saveRDS(wide_rezoned_shots_nobc, here("wide_rezoned_nobc"))
-saveRDS(mu_ests, here("mu_ests"))
-saveRDS(phi_ests, here("phi_ests"))
+eta_ests <- joined_shots %>% 
+  rowwise() %>% 
+  fit_eta() %>% 
+  as_tibble() %>% 
+  add_column(PLAYER_NAME = joined_shots$PLAYER_NAME) %>% 
+  relocate(PLAYER_NAME)
+
+View(eta_ests)
+View(mu_ests)
+saveRDS(joined_shots, here("/saved_robjs/joined_shots"))
+saveRDS(design_shooting, here("/saved_robjs/design_shooting"))
+saveRDS(wide_rezoned_shots_nobc, here("/saved_robjs/wide_rezoned_nobc"))
+#saveRDS(mu_ests, here("/saved_robjs/mu_ests"))
+#saveRDS(eta_ests, here("/saved_robjs/eta_ests"))
+
+#write_csv(eta_ests, here("/data/eta_ests.csv"))
+#write_csv(mu_ests, here("/data/mu_ests.csv"))
+write_csv(joined_shots, here("/data/joined_shots.csv"))
+write_csv(joined_shots_full, here("/data/joined_shots_full.csv"))
+
+# wide_rezoned_shots_nobc <- readRDS(here("wide_rezoned_nobc"))
+view(joined_shots_full)
+
