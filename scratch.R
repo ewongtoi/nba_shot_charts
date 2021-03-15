@@ -244,3 +244,32 @@ write_csv(joined_shots_full, here("/data/joined_shots_full.csv"))
 # wide_rezoned_shots_nobc <- readRDS(here("wide_rezoned_nobc"))
 view(joined_shots_full)
 
+# 19-20 -------------------------------------------------------------------
+shots <- read_csv("data/my_nba_shotchartdetail_2019-20.csv")
+
+
+atleast500 <- (table(shots$PLAYER_NAME) %>% sort())[373:527] %>% names()
+
+atleast500_shots <- shots %>% 
+  dplyr::filter(PLAYER_NAME %in% atleast500) %>% 
+  arrange(PLAYER_NAME) %>% 
+  dplyr::select(c(PLAYER_NAME, LOC_X, LOC_Y, EVENT_TYPE))
+
+
+
+
+polar_500 <- cart2pol(atleast500_shots$LOC_X, atleast500_shots$LOC_Y)
+
+
+write_csv(cbind(atleast500_shots, polar_500[, 1:2]), here("/data/reg1920_500plus.csv"))
+
+
+
+
+
+
+
+
+
+
+

@@ -70,7 +70,7 @@ parameters = {
 	'VsDivision': '',
 	'VsConference': '',
 	'SeasonSegment': '',
-	'Season': '2018-19',
+	'Season': '2019-20',
 	'RookieYear': '',
 	'PlayerPosition': '',
 	'Outcome': '',
