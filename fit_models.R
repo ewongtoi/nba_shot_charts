@@ -1,15 +1,14 @@
 library(nimble)
 library(here)
 library(dplyr)
-library(rstan)
 library(bayesplot)
 library(parallel)
 library(tibble)
 library(stringr)
 library(tidyr)
+library(robustHD)
+library(igraph)
 
-rstan_options(auto_write = TRUE)
-options(mc.cores = parallel::detectCores())
 
 load_shots <- readRDS(here("/saved_robjs/joined_shots"))
 design_shooting <- readRDS(here("/saved_robjs/design_shooting"))
@@ -21,102 +20,145 @@ player_mat <- load_shots %>%
   mutate(Exp2 = Exp^2, Salary2 = Salary^2) %>% 
   as.matrix()
 
+
+player_names <- load_shots %>% select(PLAYER_NAME) %>% c()
+
+M <- 167
 n_players <- load_shots %>% nrow()
 n_zones <- 12
+set.seed(225)
+mu <- matrix(rnorm(n_players * n_zones), nrow = n_players, ncol = n_zones)
+eta <- matrix(rnorm(n_players * n_zones), nrow = n_players, ncol = n_zones)
 
-mu <- matrix(0, nrow = n_players, ncol = n_zones)
-eta <- matrix(0, nrow = n_players, ncol = n_zones)
-scale_eff <- matrix(0, nrow = n_players)
 
-omega <- matrix(0, nrow = n_players, ncol = n_zones)
+alphas <- matrix(rnorm(5*M), nrow = M, ncol = 5)
+betas <- matrix(rnorm(5*M), nrow = M, ncol = 5)
+alpha <- rgamma(1, 3, 1)
 
-alphas <- matrix(0, nrow = n_players, ncol = 7)
-betas <- matrix(0, nrow = n_players, ncol = 7)
 
-player_alph <- rep(0, times=4)
-player_beta <- rep(0, times=4)
+z <- rCRP(1, alpha, n_players)
 
 
 Y <- load_shots %>% dplyr::select(ends_with("attempt"))
 Z <- load_shots %>% dplyr::select(ends_with("pct"))
 
-id_7 = diag(10, 7)
+id_5 = diag(10, 5)
 id_nz = diag(10, n_zones)
-zero_7 <- rep(0, times=7)
-zero_12 <- rep(0, times=12)
+zero_5 <- rep(0, times=5)
+zero_nz <- rep(0, times=12)
 
-#id_7 <- diag(7)
-#id_nz <- diag(n_zones)
-#zero_7 <- rep(0, times=7)
-#zero_nz <- rep(0, times=n_zones)
+
+MoransI.Basis<-function(X,r,A){
+  
+  
+  n = dim(X)[1]
+  
+  PsiOper = (diag(n) - X%*%solve(t(X)%*%X)%*%t(X))%*%A%*%(diag(n) - X%*%solve(t(X)%*%X)%*%t(X))
+  output2<-eigen(PsiOper)
+  Psi = output2$vectors[,1:r]
+  
+  return(Psi)
+}
+
+
+
+
+
+
+
+new_basis <- matrix(0, nrow=12, ncol=12)
+ab3c  <- c(1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0)
+ab3lc <- c(1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0)
+ab3rc <- c(1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1)
+paint <- c(0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0)
+lc3   <- c(0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0)
+mrc   <- c(1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0)
+mrlc  <- c(1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0)
+mrl   <- c(0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0)
+mrrc  <- c(1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1)
+mrr   <- c(0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1)
+ra    <- c(0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0)
+rc3   <- c(0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1)
+
+new_basis <- rbind(ab3c, ab3lc, ab3rc, paint, lc3, mrc, mrlc, mrl, mrrc, mrr, ra, rc3)
+colnames(new_basis) = rownames(new_basis)
+new_basis == t(new_basis)
+
+#intercept only model
+X = matrix(1,12,1)
+r = 5
+#first nearest neighbor Moran's I
+Psi = MoransI.Basis(X,5,new_basis)
+
+design_shooting1 <- Psi
+
+for(i in 1:5){
+  design_shooting1[, i] <- (Psi[, i] - mean(Psi[, i]))/sd(Psi[,i])
+}
+
 
 shots_code <- nimbleCode({
 
-  player_alph[1:4] ~ dmnorm(mean=zero_7[1:4], cov=id_7[1:4,1:4])
-  player_beta[1:4] ~ dmnorm(mean=zero_7[1:4], cov=id_7[1:4,1:4])
+  
+  alpha ~ dgamma(3, 1)
+  z[1:n_players] ~ dCRP(alpha, size=n_players)
+  
+  for(i in 1:M) {
+    betas[i, 1:5] ~ dmnorm(mean=zero_5[1:5], cov=id_5[1:5,1:5])
+    alphas[i, 1:5] ~ dmnorm(mean=zero_5[1:5], cov=id_5[1:5,1:5])
+  }
   
   for(player in 1:n_players){
     # prior
-    betas[player, 1:7] ~ dmnorm(mean=zero_7[1:7], cov=id_7[1:7,1:7])
-    alphas[player, 1:7] ~ dmnorm(mean=zero_7[1:7], cov=id_7[1:7,1:7])
-    scale_eff[player, 1] ~ dnorm(mean=0, sd=10)
-    sigma[1:n_zones, 1:n_zones] ~ dinvwish(S = id_nz[1:n_zones, 1:n_zones], df=15)
-    
-    
-    omega[player, 1:n_zones] ~ dmnorm(mean=zero_nz[1:n_zones], cov=sigma[1:n_zones,1:n_zones])
-
     
   
-    m_mean[1:n_zones, player] <- design_shooting[1:n_zones, 1:7] %*% betas[player, 1:7] 
-    mu[player, 1:n_zones] ~ dmnorm(mean=m_mean[1:n_zones, 1], cov=id_nz[1:n_zones, 1:n_zones])
+    m_mean[player, 1:n_zones] <- design_shooting[1:n_zones, 1:5] %*% betas[z[player], 1:5] 
+    mu[player, 1:n_zones] ~ dmnorm(mean=m_mean[player, 1:n_zones], cov=id_nz[1:n_zones, 1:n_zones])
     
-    rate_adj <- (player_mat[player, 1:4]%*%player_beta[1:4])[1,1]  
     
     for(shot in 1:n_zones){
     
       
       
-      y_rate <- exp(mu[player, shot] + rate_adj + scale_eff[player, 1] * omega[player, shot])
+      y_rate <- exp(mu[player, shot]) 
       Y[player, shot] ~ dpois(y_rate)   
 
     }
 
-    e_mean[1:n_zones, player] <- design_shooting[1:n_zones, 1:7] %*% alphas[player, 1:7] 
-    eta[player, 1:n_zones] ~ dmnorm(e_mean[1:n_zones, 1], cov=id_nz[1:n_zones, 1:n_zones])
-    mean_adj <- (player_mat[player, 1:4]%*%player_alph[1:4])[1,1]  
+    e_mean[player, 1:n_zones] <- design_shooting[1:n_zones, 1:5] %*% alphas[z[player], 1:5] 
+    eta[player, 1:n_zones] ~ dmnorm(e_mean[player,  1:n_zones], cov=id_nz[1:n_zones, 1:n_zones])
+
     
     for(pct in 1:n_zones){
-      
-      lz_mean <- (eta[player, pct] + mean_adj + omega[player, pct])
-      logit(Z[player, pct]) ~ dnorm(lz_mean, 10)
+      lz_mean <- (eta[player, pct])
+      logit(Z[player, pct]) ~ dnorm(lz_mean, sd=10)
     }
   }
-
+  
 })
  
 
 
 constants <- list(n_players = n_players,
                   n_zones = n_zones,
-                  design_shooting = design_shooting,
-                  id_7 = id_7,
+                  design_shooting = design_shooting1,
+                  id_5 = id_5,
                   id_nz = id_nz,
-                  zero_7 = zero_7,
+                  zero_5 = zero_5,
                   zero_nz = zero_nz,
-                  player_mat = player_mat)
+                  M=M)
 
 
  
-data <- list(Y = Y * 10,
+data <- list(Y = Y,
              Z = Z)
  
 inits <- list(betas = betas,
               alphas = alphas,
+              alpha = alpha,
               eta = eta,
               mu = mu,
-              scale_eff = scale_eff,
-              player_beta = player_beta,
-              player_alph = player_alph)
+              z=z)
  
 shots_model <- nimbleModel(shots_code, 
                            constants = constants, 
@@ -125,31 +167,34 @@ shots_model <- nimbleModel(shots_code,
                            debug=FALSE)
  
 shots_mcmc <- buildMCMC(shots_model)
-mcmc.outiw10 <- nimbleMCMC(code = shots_code, constants = constants,
+set.seed(226)
+mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
                        data = data, inits = inits,
                        nchains = 2, niter = 10000,
                        summary = TRUE, WAIC = TRUE,
                        monitors = c('alphas','betas',
-                                    'scale_eff', 'mu', 'eta', 
-                                    'player_alph', 'player_beta'))
+                                     'mu', 'eta', 'z'))#,
+                                   # 'player_alph', 'player_beta'))
 # 
 # 
 
+saveRDS(mcmc.out, here("/saved_robjs/samps_moran3"))
+
 player_name <- load_shots$PLAYER_NAME
-param_nm <- rownames(mcmc.out$summary$all.chains)
-mcmcout_median_ab <- as_tibble(mcmc.out$summary$all.chains) %>% 
+param_nm <- rownames(mcmc.outiw$summary$all.chains)
+mcmcout_median_ab <- as_tibble(mcmc.outiw$summary$all.chains) %>% 
   add_column(param_nm, .before="Mean") %>% 
   dplyr::filter(str_detect(param_nm, "^beta|^alpha")) %>% 
   mutate(player_ind = as.numeric(str_extract(param_nm, "(?<=\\[)(.*?)(?=,)"))) %>% 
   mutate(zone = as.numeric(str_extract(param_nm, "(?<=,)(.*?)(?=\\])"))) %>% 
   mutate(param = str_extract(param_nm, "(.*?)(?=\\[)")) %>%
   arrange(.group_by=player_ind) %>% 
-  select(c(player_ind,Median, zone, param)) %>% 
+  dplyr::select(c(player_ind,Median, zone, param)) %>% 
   pivot_wider(names_from=c(zone, param), values_from=Median) %>% 
   add_column(player_name, .before="player_ind")
 
 
-mcmcout_median_ab <- as_tibble(mcmc.out$summary$all.chains) %>% 
+mcmcout_median_ab <- as_tibble(mcmc.outiw$summary$all.chains) %>% 
   add_column(param_nm, .before="Mean") %>% 
   filter(str_detect(param_nm, "^beta|^alpha|^player")) %>% 
   mutate(param = str_extract(param_nm, "(.*?)(?=\\[)"))
@@ -232,3 +277,109 @@ View(mcmc.out$summary$all.chains)
 #   control = list(adapt_delta = 0.9,
 #                  max_treedepth = 12)
 # )
+
+
+
+mcmc.outiw$samples$chain1[ , grep('z', colnames(mcmc.outiw$samples$chain1))]
+
+
+dim(mcmc.out$samples$chain2[ , grep('z', colnames(mcmc.out$samples$chain1))])
+zsamp1 <- mcmc.out$samples$chain1[ , grep('z', colnames(mcmc.out$samples$chain1))]
+zsamp2 <- mcmc.out$samples$chain2[ , grep('z', colnames(mcmc.out$samples$chain2))]
+zsamptot <- rbind(zsamp1, zsamp2)
+clust_count <- rep(0, times=16000)
+for(i in 1:8000){
+  clust_count[i] <- max(zsamp1[i+2000, ])
+  clust_count[i+ 8000] <- max(zsamp2[i+2000, ])
+}
+hist(clust_count)
+
+
+mean(clust_count)
+unique(clust_count)
+table(clust_count)
+
+make_adj_mat <- function(member_list){
+  n <- length(member_list)
+  
+  adj_mat <- matrix(0, nrow=n, ncol=n)
+  
+  for(i in 1:n){
+    adj_mat[,i] = (member_list == member_list[i]) #* member_list[i]
+  }
+  
+  rownames(adj_mat) <- player_names[[1]]
+  colnames(adj_mat) <- player_names[[1]]
+  
+  
+  return(adj_mat)
+  
+}
+
+
+
+test_mat <- make_adj_mat(zsamp1[1000,])
+
+
+
+
+test_graph <- graph_from_adjacency_matrix(l[13060])
+plot(test_graph)
+max(zsamp1[1000,])
+
+
+image(l[[13149]])
+
+l[[1302]][40:50, 40:50]
+
+mean(l[[1302]])
+
+
+mean(clust_count)
+
+N <- 16000
+l <- vector("list", N)
+
+sum_mat <- matrix(0, n_players, n_players)
+for(z in 1:8000){
+  l[[z]] <- make_adj_mat(zsamp1[z+2000, ])
+  l[[z + 8000]] <- make_adj_mat(zsamp2[z+2000, ])
+  
+  sum_mat <- l[[z]] + l[[z + 8000]] + sum_mat
+}
+
+
+mean_mat <- sum_mat/16000
+
+mean_mat[1:10, 1:10]
+
+image(mean_mat)
+
+close_mat <- l[[1]]
+
+min_dist <- 10000
+dists <- rep(0, 16000)
+for(z in 1:16000){
+  
+  diff <- mean_mat - l[[z]]
+  ss <- mean(diff^2)
+  dists[z] = ss
+}
+
+dim(test_mat)
+library(ggplot2)
+ggplot(data.frame(test_mat), aes(x = from, y = to, fill = group)) +
+  geom_raster() +
+  theme_bw() +
+  # Because we need the x and y axis to display every node,
+  # not just the nodes that have connections to each other,
+  # make sure that ggplot does not drop unused factor levels
+  scale_x_discrete(drop = FALSE) +
+  scale_y_discrete(drop = FALSE) +
+  theme(
+    # Rotate the x-axis lables so they are legible
+    axis.text.x = element_text(angle = 270, hjust = 0),
+    # Force the plot into a square aspect ratio
+    aspect.ratio = 1,
+    # Hide the legend (optional)
+    legend.position = "none")

@@ -14,7 +14,7 @@ library(here)
 
 # load data ---------------------------------------------------------------
 
-shots <- read_csv("my_nba_shotchartdetail_2018-19.csv")
+shots <- read_csv("data/my_nba_shotchartdetail_2018-19.csv")
 shots
 shots1 <- read_csv("nba_shotchartdetail_2018-191.csv")
 shots
@@ -266,10 +266,7 @@ write_csv(cbind(atleast500_shots, polar_500[, 1:2]), here("/data/reg1920_500plus
 
 
 
-
-
-
-
+names(wide_rezoned_shots)
 
 
 
