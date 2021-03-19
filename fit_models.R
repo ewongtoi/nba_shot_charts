@@ -80,15 +80,34 @@ mrr   <- c(0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1)
 ra    <- c(0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0)
 rc3   <- c(0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1)
 
+regions <- c("above break 3 center", 
+             "above break 3 left center",
+             "above break 3 right center",
+             "paint",
+             "left corner 3",
+             "midrange center",
+             "midrange left center",
+             "midrange left",
+             "midrange right center",
+             "midrange right",
+             "restricted area",
+             "right corner 3")
+
 new_basis <- rbind(ab3c, ab3lc, ab3rc, paint, lc3, mrc, mrlc, mrl, mrrc, mrr, ra, rc3)
 colnames(new_basis) = rownames(new_basis)
+colnames(new_basis) <- regions
+rownames(new_basis) <- regions
 new_basis == t(new_basis)
+
+new_basis1 <- new_basis - diag(12)
+
+write.csv(data.frame(new_basis1), here("adjacency_basis1.csv"))
 
 #intercept only model
 X = matrix(1,12,1)
 r = 5
 #first nearest neighbor Moran's I
-Psi = MoransI.Basis(X,5,new_basis)
+Psi = MoransI.Basis(X,5,new_basis1)
 
 design_shooting1 <- Psi
 
@@ -96,6 +115,7 @@ for(i in 1:5){
   design_shooting1[, i] <- (Psi[, i] - mean(Psi[, i]))/sd(Psi[,i])
 }
 
+write.csv(data.frame(design_shooting1), here("moranbasis.csv"))
 
 shots_code <- nimbleCode({
 
@@ -178,7 +198,7 @@ mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
 # 
 # 
 
-saveRDS(mcmc.out, here("/saved_robjs/samps_moran3"))
+saveRDS(mcmc.out, here("/saved_robjs/samps_moran3_diag"))
 
 player_name <- load_shots$PLAYER_NAME
 param_nm <- rownames(mcmc.outiw$summary$all.chains)
@@ -316,6 +336,30 @@ make_adj_mat <- function(member_list){
   
 }
 
+make_adj_mat_grp <- function(member_list){
+  n <- length(member_list)
+  
+  adj_mat <- matrix(0, nrow=n, ncol=n)
+  
+  for(i in 1:n){
+    adj_mat[,i] = (member_list == member_list[i]) * member_list[i]
+  }
+  
+  rownames(adj_mat) <- player_names[[1]]
+  colnames(adj_mat) <- player_names[[1]]
+  
+  
+  return(adj_mat)
+  
+}
+
+table(zsamp1[6395,])
+
+image(make_adj_mat_grp(zsamp1[6395,]))
+max(zsamp1[6395,])
+make_adj_mat_grp(zsamp1[6395,])
+
+sum(zsamp1[6395,]==1)
 
 
 test_mat <- make_adj_mat(zsamp1[1000,])
@@ -366,6 +410,13 @@ for(z in 1:16000){
   dists[z] = ss
 }
 
+
+# closest is at 13060; converts to 13060-8000+2000
+mean(zsamp2[7060,] == l[[13060]])
+
+image(l[[13060]])
+sum(l[[13060]])/(167)
+
 dim(test_mat)
 library(ggplot2)
 ggplot(data.frame(test_mat), aes(x = from, y = to, fill = group)) +
@@ -383,3 +434,5 @@ ggplot(data.frame(test_mat), aes(x = from, y = to, fill = group)) +
     aspect.ratio = 1,
     # Hide the legend (optional)
     legend.position = "none")
+
+write.csv(mean_mat, here("mean_adj_mat.csv"))
