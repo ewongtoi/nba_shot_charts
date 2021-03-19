@@ -3,7 +3,9 @@ library(tidyverse)
 library(here)
 library(plyr)
 
-samples <- readRDS(here("saved_robjs/samps_moran3"))
+samples <- readRDS(here("saved_robjs/samps_moran3_diag"))
+
+
 
 
 summary(samples)
@@ -22,29 +24,35 @@ length(alphas1[2,])
 class(alphas1)
 length(alphas1)
 
-# NEED TO TEST
+# c_smps is a row of the matrix of posterior samples
+# mmbr_list is the z vector holding the assignments
 
+mml1 <- zsamp1[200,]
+csmps1 <- alphas1[200,]
+csmps1
 reorder_coefs <- function(c_smps, mmbr_list) {
   num_clust <- max(mmbr_list)
-  should_swap == FALSE
+  should_swap <- FALSE
   
   
   if(num_clust == 2){
-    if(c_smps[1] > c_smps[2]){
+    if(c_smps[1] < c_smps[2]){
       temps <- c_smps[c(2, 169, 336, 503, 670)]
       c_smps[c(2, 169, 336, 503, 670)] <- c_smps[c(1, 168, 335, 502, 669)]
       c_smps[c(1, 168, 335, 502, 669)] <- temps
       
-      plyr::mapvalues(mmbr_list, from=c(1, 2), to=c(2, 1))
+      relab <- plyr::mapvalues(mmbr_list, from=c(1, 2), to=c(2, 1))
       
-      return(c_smps)
+      return(list(c_smps=c_smps, mml=relab))
     }
     
     
   }
   
-  return(NULL)
+  return(list(c_smps, relab=mmbr_list))
 }
+
+outs <- reorder_coefs(csmps1, mml1)
 
 
 mapvalues(a, from=c(1, 2, 3, 4, 5), to=c(4, 5, 6, 7, 8))
