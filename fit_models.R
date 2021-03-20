@@ -10,7 +10,7 @@ library(robustHD)
 library(igraph)
 
 
-load_shots <- readRDS(here("/saved_robjs/joined_shots"))
+load_shots <- readRDS(here::here("/saved_robjs/joined_shots"))
 design_shooting <- readRDS(here("/saved_robjs/design_shooting"))
 
 player_mat <- load_shots %>% 
@@ -21,9 +21,9 @@ player_mat <- load_shots %>%
   as.matrix()
 
 
-player_names <- load_shots %>% select(PLAYER_NAME) %>% c()
+player_names <- load_shots %>% dplyr::select(PLAYER_NAME) %>% c()
 
-M <- 167
+M <- 30
 n_players <- load_shots %>% nrow()
 n_zones <- 12
 set.seed(225)
@@ -33,17 +33,37 @@ eta <- matrix(rnorm(n_players * n_zones), nrow = n_players, ncol = n_zones)
 
 alphas <- matrix(rnorm(5*M), nrow = M, ncol = 5)
 betas <- matrix(rnorm(5*M), nrow = M, ncol = 5)
-alpha <- rgamma(1, 3, 1)
+alpha <- rgamma(1, 2, 1)
+
+clust <- sample(1:10, n_players, replace=TRUE)
+
+rand_eff <- matrix(0, nrow=n_players, ncol=n_zones)
+scale_eff <- rep(0, times=n_players)
 
 
-z <- rCRP(1, alpha, n_players)
 
 
 Y <- load_shots %>% dplyr::select(ends_with("attempt"))
 Z <- load_shots %>% dplyr::select(ends_with("pct"))
 
+
+
+for(r in 1:nrow(Z)){
+  for(c in 1:ncol(Z)){
+    if(Z[r, c] == 0){
+      Z[r, c] <-  0.001
+    } else if (Z[r, c] ==1 ){
+      Z[r,c] <- .999
+    }
+  }
+}
+
+logit_Z <- log(Z/(1-Z))
+
 id_5 = diag(10, 5)
 id_nz = diag(10, n_zones)
+rand_Sig <- id_nz
+
 zero_5 <- rep(0, times=5)
 zero_nz <- rep(0, times=12)
 
@@ -120,44 +140,49 @@ write.csv(data.frame(design_shooting1), here("moranbasis.csv"))
 shots_code <- nimbleCode({
 
   
-  alpha ~ dgamma(3, 1)
-  z[1:n_players] ~ dCRP(alpha, size=n_players)
+  #alpha ~ dgamma(1, 1)
+  clust[1:n_players] ~ dCRP(0.1, size=n_players)
   
   for(i in 1:M) {
     betas[i, 1:5] ~ dmnorm(mean=zero_5[1:5], cov=id_5[1:5,1:5])
     alphas[i, 1:5] ~ dmnorm(mean=zero_5[1:5], cov=id_5[1:5,1:5])
   }
   
+  for(i in 1:n_zones){
+    sigma[i] ~ dinvgamma(.01, .01)
+  }
+  
   for(player in 1:n_players){
     # prior
-    
+    rand_Sig[1:n_zones, 1:n_zones] ~ dinvwish(id_nz[1:n_zones, 1:n_zones], df=15)
+    rand_eff[player, 1:n_zones] ~ dmnorm(zero_nz[1:n_zones], rand_Sig[1:n_zones, 1:n_zones])
+    scale_eff[player] ~ dnorm(0, sd=10)
   
-    m_mean[player, 1:n_zones] <- design_shooting[1:n_zones, 1:5] %*% betas[z[player], 1:5] 
-    mu[player, 1:n_zones] ~ dmnorm(mean=m_mean[player, 1:n_zones], cov=id_nz[1:n_zones, 1:n_zones])
+    mu[player, 1:n_zones] <- design_shooting[1:n_zones, 1:5] %*% betas[clust[player], 1:5] + rand_eff[player, 1:n_zones]
+    #mu[player, 1:n_zones] ~ dmnorm(mean=m_mean[player, 1:n_zones], cov=id_nz[1:n_zones, 1:n_zones])
     
     
     for(shot in 1:n_zones){
     
       
       
-      y_rate <- exp(mu[player, shot]) 
-      Y[player, shot] ~ dpois(y_rate)   
+      y_rate[player, shot] <- exp(mu[player, shot]) 
+      Y[player, shot] ~ dpois(y_rate[player, shot])   
 
     }
 
-    e_mean[player, 1:n_zones] <- design_shooting[1:n_zones, 1:5] %*% alphas[z[player], 1:5] 
-    eta[player, 1:n_zones] ~ dmnorm(e_mean[player,  1:n_zones], cov=id_nz[1:n_zones, 1:n_zones])
+    eta[player, 1:n_zones] <- design_shooting[1:n_zones, 1:5] %*% alphas[clust[player], 1:5] + rand_eff[player, 1:n_zones] * scale_eff[player]
+    #eta[player, 1:n_zones] ~ dmnorm(e_mean[player,  1:n_zones], cov=id_nz[1:n_zones, 1:n_zones])
 
     
     for(pct in 1:n_zones){
-      lz_mean <- (eta[player, pct])
-      logit(Z[player, pct]) ~ dnorm(lz_mean, sd=10)
+      lz_mean[player, pct] <- (eta[player, pct])
+      logit_Z[player, pct] ~ dnorm(lz_mean[player, pct], var=sigma[pct])
     }
   }
   
 })
  
-
 
 constants <- list(n_players = n_players,
                   n_zones = n_zones,
@@ -171,14 +196,18 @@ constants <- list(n_players = n_players,
 
  
 data <- list(Y = Y,
-             Z = Z)
+             logit_Z = logit_Z)
  
 inits <- list(betas = betas,
               alphas = alphas,
               alpha = alpha,
               eta = eta,
               mu = mu,
-              z=z)
+              sigma = rep(1, times=n_zones),
+              clust=clust,
+              rand_eff = rand_eff,
+              rand_Sig = rand_Sig,
+              scale_eff = scale_eff)
  
 shots_model <- nimbleModel(shots_code, 
                            constants = constants, 
@@ -190,15 +219,16 @@ shots_mcmc <- buildMCMC(shots_model)
 set.seed(226)
 mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
                        data = data, inits = inits,
-                       nchains = 2, niter = 10000,
-                       summary = TRUE, WAIC = TRUE,
+                       nchains = 2, niter = 20000,
+                       summary = TRUE, WAIC = FALSE,
                        monitors = c('alphas','betas',
-                                     'mu', 'eta', 'z'))#,
+                                     'mu', 'eta', 'clust',
+                                    'scale_eff', 'rand_eff'))#,
                                    # 'player_alph', 'player_beta'))
 # 
 # 
 
-saveRDS(mcmc.out, here("/saved_robjs/samps_moran3_diag"))
+saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_fixedalphpt1"))
 
 player_name <- load_shots$PLAYER_NAME
 param_nm <- rownames(mcmc.outiw$summary$all.chains)
@@ -304,37 +334,26 @@ mcmc.outiw$samples$chain1[ , grep('z', colnames(mcmc.outiw$samples$chain1))]
 
 
 dim(mcmc.out$samples$chain2[ , grep('z', colnames(mcmc.out$samples$chain1))])
-zsamp1 <- mcmc.out$samples$chain1[ , grep('z', colnames(mcmc.out$samples$chain1))]
-zsamp2 <- mcmc.out$samples$chain2[ , grep('z', colnames(mcmc.out$samples$chain2))]
+zsamp1 <- mcmc.out$samples$chain1[ , grep('clust', colnames(mcmc.out$samples$chain1))]
+zsamp2 <- mcmc.out$samples$chain2[ , grep('clust', colnames(mcmc.out$samples$chain2))]
 zsamptot <- rbind(zsamp1, zsamp2)
-clust_count <- rep(0, times=16000)
-for(i in 1:8000){
-  clust_count[i] <- max(zsamp1[i+2000, ])
-  clust_count[i+ 8000] <- max(zsamp2[i+2000, ])
+clust_count <- rep(0, times=30000)
+for(i in 1:15000){
+  clust_count[i] <- length(unique(zsamp1[i+5000, ]))
+  clust_count[i+ 15000] <- length(unique(zsamp2[i+5000, ]))
 }
-hist(clust_count)
+hist(clust_count[8001:16000])
+table(clust_count[1:8000])
 
+hist(clust_count[15001:30000])
 
 mean(clust_count)
 unique(clust_count)
 table(clust_count)
+c(table(zsamp1))
+c(table(zsamp2))
 
-make_adj_mat <- function(member_list){
-  n <- length(member_list)
-  
-  adj_mat <- matrix(0, nrow=n, ncol=n)
-  
-  for(i in 1:n){
-    adj_mat[,i] = (member_list == member_list[i]) #* member_list[i]
-  }
-  
-  rownames(adj_mat) <- player_names[[1]]
-  colnames(adj_mat) <- player_names[[1]]
-  
-  
-  return(adj_mat)
-  
-}
+
 
 make_adj_mat_grp <- function(member_list){
   n <- length(member_list)
