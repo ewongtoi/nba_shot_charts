@@ -16,7 +16,7 @@ library(here)
 
 shots <- read_csv("data/my_nba_shotchartdetail_2018-19.csv")
 shots
-shots1 <- read_csv("nba_shotchartdetail_2018-191.csv")
+shots1 <- read_csv("data/nba_shotchartdetail_2018-191.csv")
 shots
 
 post_shots <- read_csv("nba_shotchartdetail_2018-19_postseason.csv")
@@ -164,8 +164,17 @@ dim(wide_rezoned_shots_nobc)
 
 "Timothe Luwawu-Cabarrot" %in% wide_rezoned_shots$PLAYER_NAME
 
+str_ht_to_in <- function(str_ht){
+  split <- strsplit(str_ht, "-")
+  
+  ft <- as.numeric(split[[1]][1])
+  inch <- as.numeric(split[[1]][2])
+  
+  return(ft*12 + inch)
+}
 
-joined_inf <- readRDS(here("salary_plus"))
+
+joined_inf <- readRDS(here::here("/saved_robjs/salary_plus"))
 
 
 joined_shots <- left_join(wide_rezoned_shots_nobc, joined_inf, 
@@ -173,7 +182,8 @@ joined_shots <- left_join(wide_rezoned_shots_nobc, joined_inf,
   drop_na() %>% 
   group_by(PLAYER_NAME) %>% 
   slice(1) %>% 
-  ungroup()
+  ungroup() %>% 
+  dplyr::mutate(Ht_in = str_ht_to_in(Ht))
 
 joined_shots_full <- left_join(wide_rezoned_shots, joined_inf, 
                           by = c("PLAYER_NAME" = "Player")) %>% 
@@ -230,7 +240,7 @@ eta_ests <- joined_shots %>%
 
 View(eta_ests)
 View(mu_ests)
-saveRDS(joined_shots, here("/saved_robjs/joined_shots"))
+saveRDS(joined_shots, here::here("/saved_robjs/joined_shots"))
 saveRDS(design_shooting, here("/saved_robjs/design_shooting"))
 saveRDS(wide_rezoned_shots_nobc, here("/saved_robjs/wide_rezoned_nobc"))
 #saveRDS(mu_ests, here("/saved_robjs/mu_ests"))
@@ -238,7 +248,7 @@ saveRDS(wide_rezoned_shots_nobc, here("/saved_robjs/wide_rezoned_nobc"))
 
 #write_csv(eta_ests, here("/data/eta_ests.csv"))
 #write_csv(mu_ests, here("/data/mu_ests.csv"))
-write_csv(joined_shots, here("/data/joined_shots.csv"))
+write_csv(joined_shots, here::here("/data/joined_shots.csv"))
 write_csv(joined_shots_full, here("/data/joined_shots_full.csv"))
 
 # wide_rezoned_shots_nobc <- readRDS(here("wide_rezoned_nobc"))
