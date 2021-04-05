@@ -2,8 +2,28 @@ library(tidyr)
 library(tidyverse)
 library(here)
 library(plyr)
+library(BasketballAnalyzeR)
+library(cowplot)
+library(grid)
+library(Rmisc)
+library(ggpubr)
+library(jpeg)
+library(RCurl)
+library(gridExtra)
+library(xtable)
 
-samples <- readRDS(here("saved_robjs/samps_moran_randeff_fixedalph1"))
+samples <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525"))
+load_shots <- readRDS(here::here("/saved_robjs/joined_shots"))
+rezoned_shots <- readRDS(here::here("/saved_robjs/rezoned_shots"))
+
+
+courtImg.URL <- "https://thedatagame.files.wordpress.com/2016/03/nba_court.jpg"
+court <- rasterGrob(readJPEG(getURLContent(courtImg.URL)),
+                    width=unit(1,"npc"), height=unit(1,"npc"))
+
+n_players <- dim(load_shots)[1]
+
+# samples <- mcmc.out
 
 # gather samples
 zsamp1 <- samples$samples$chain1[ , grep('clust', colnames(samples$samples$chain1))]
@@ -144,8 +164,8 @@ make_adj_mat <- function(member_list){
     adj_mat[,i] = (member_list == member_list[i]) #* member_list[i]
   }
   
-  rownames(adj_mat) <- player_names[[1]]
-  colnames(adj_mat) <- player_names[[1]]
+  #rownames(adj_mat) <- player_names[[1]]
+  #colnames(adj_mat) <- player_names[[1]]
   
   
   return(adj_mat)
@@ -175,13 +195,16 @@ l <- vector("list", N)
 l2 <- vector("list", N)
 sum_mat <- matrix(0, n_players, n_players)
 for(z in 1:N){
+  if(z/1000 == 0){
+    print(z)
+  }
   l[[z]] <- make_adj_mat(imposed_samps1$relab_grps[z,])
   l2[[z]] <- make_adj_mat(imposed_samps2$relab_grps[z,])
-  sum_mat <- l[[z]] + sum_mat
+  sum_mat <- l[[z]] + l2[[z]] + sum_mat
 }
 
 
-
+mean_mat <- sum_mat/(2*N)
 
 dists <- rep(0, 2*N)
 for(z in 1:N){
@@ -189,25 +212,1102 @@ for(z in 1:N){
   diff <- mean_mat - l[[z]]
   ss <- mean(diff^2)
   dists[z] = ss
-}
-for(z in 1:N){
+
   
   diff <- mean_mat - l2[[z]]
   ss <- mean(diff^2)
-  dists[z] = ss
+  dists[z + N] = ss
 }
 
-mean_mat <- sum_mat/(2*N)
 
+pnms <- load_shots$PLAYER_NAME
 image(t(mean_mat))
 closest_mat <- which.min(dists)
 closest_mat
-pnms[which(imposed_samps1$relab_grps[closest_mat, ]==7)]
+
+
+table(imposed_samps1$relab_grps[closest_mat,])
+
+load_shots
+
+ts.plot(imposed_samps2$ord_coefs[,67])
+
+clust_shots <- load_shots %>% 
+  add_column(cluster = imposed_samps1$relab_grps[closest_mat,]) 
+
+
+
+comp_3pct <- function(all_shots){
+  atts <- all_shots %>% 
+    dplyr::select(which(str_detect(colnames(all_shots), "^(?=.*3)(?=.*attempt).*$")==TRUE))
+  
+  pcts <- all_shots %>% 
+    dplyr::select(which(str_detect(colnames(all_shots), "^(?=.*3)(?=.*pct).*$")==TRUE))
+  
+  return(list(sum(atts * pcts)/sum(atts), sum(atts)/nrow(atts)))
+}
+
+comp_fgpct <- function(all_shots){
+  atts <- all_shots %>% 
+    dplyr::select(which(str_detect(colnames(all_shots), "^(?=.*attempt).*$")==TRUE)) %>% 
+    dplyr::select(-total_attempts)
+  
+  pcts <- all_shots %>% 
+    dplyr::select(which(str_detect(colnames(all_shots), "^(?=.*pct).*$")==TRUE))
+  
+  return(list(sum(atts * pcts)/sum(atts), sum(atts)/nrow(atts)))
+}
+
+
+comp_zone_pct <- function(all_shots, raw_shots){
+  atts <- all_shots %>% 
+    dplyr::select(which(str_detect(colnames(all_shots), "^(?=.*attempt).*$")==TRUE)) %>% 
+    dplyr::select(-total_attempts)
+  
+
+  pcts <- all_shots %>% 
+    dplyr::select(which(str_detect(colnames(all_shots), "^(?=.*pct).*$")==TRUE))
+  
+  cart_zone_ctrs <- raw_shots %>% 
+    dplyr::filter(SHOT_ZONE_BASIC!="Backcourt") %>% 
+    group_by(zone) %>% 
+    dplyr::summarize(mean_x = mean(LOC_X), 
+              mean_y = mean(LOC_Y))
+  
+  return(list(pcts=colSums(atts*pcts)/colSums(atts), ctr=cart_zone_ctrs))
+}
+
+all_shots <- clust_shots
+atts <- all_shots %>% 
+  dplyr::select(which(str_detect(colnames(all_shots), "^(?=.*attempt).*$")==TRUE)) %>% 
+  dplyr::select(-total_attempts) %>% 
+  colSums()
+
+atts
+
+three_pct <- rep(0, times = max(clust_shots$cluster))
+three_att <- rep(0, times = max(clust_shots$cluster))
+total_pct <- rep(0, times = max(clust_shots$cluster))
+total_att <- rep(0, times = max(clust_shots$cluster))
+
+for(cl in 1:max(clust_shots$cluster)){
+  pct_att3 <- comp_3pct(clust_shots %>% dplyr::filter(cluster==cl))
+  
+  three_pct[cl] <- pct_att3[[1]]
+  three_att[cl] <- pct_att3[[2]]
+  
+  pct_att <- comp_fgpct(clust_shots %>% dplyr::filter(cluster==cl))
+  
+  total_pct[cl] <- pct_att[[1]]
+  total_att[cl] <- pct_att[[2]]
+}
+
+three_pct_pos <- rep(0, times = 5)
+three_att_pos <- rep(0, times = 5)
+total_pct_pos <- rep(0, times = 5)
+total_att_pos <- rep(0, times = 5)
+
+three_pct_posall <- rep(0, times = 5)
+three_att_posall <- rep(0, times = 5)
+total_pct_posall <- rep(0, times = 5)
+total_att_posall <- rep(0, times = 5)
+positions <- c("PG", "SG", "SF", "PF", "C")
+for(ps in 1:5){
+  cl <- positions[ps]
+  
+  pct_att3 <- comp_3pct(clust_shots %>% dplyr::filter(Pos==cl))
+  
+  three_pct_pos[ps] <- pct_att3[[1]]
+  three_att_pos[ps] <- pct_att3[[2]]
+  
+  pct_att3 <- comp_3pct(all_joined %>% dplyr::filter(Pos==cl))
+  
+  three_pct_posall[ps] <- pct_att3[[1]]
+  three_att_posall[ps] <- pct_att3[[2]]
+  
+  
+  pct_att <- comp_fgpct(clust_shots %>% dplyr::filter(Pos==cl))
+  
+  total_pct_pos[ps] <- pct_att[[1]]
+  total_att_pos[ps] <- pct_att[[2]]
+
+  pct_att <- comp_fgpct(all_joined %>% dplyr::filter(Pos==cl))
+  
+  total_pct_posall[ps] <- pct_att[[1]]
+  total_att_posall[ps] <- pct_att[[2]]
+}  
+
+
+
+
+clust_summary <- clust_shots %>% 
+  group_by(cluster) %>% 
+  dplyr::summarise(Ht_mn = mean(Ht_in), 
+                   Ht_sd = sd(Ht_in),
+                   Wt_mn = mean(Wt), 
+                   Wt_sd = sd(Wt),
+                   clust_size=n(), 
+                   sal_mn = mean(Salary/1000000),
+                   sal_sd = sd(Salary/1000000),
+                   exp_mn = mean(Exp),
+                   exp_sd = sd(Exp),
+                   mode_position = names(which.max(table(Pos)))) %>% 
+  add_column(three_pct = three_pct) %>% 
+  add_column(three_att = three_att) %>% 
+  add_column(total_pct = total_pct) %>% 
+  add_column(total_att = total_att)
+
+clust_summary
+
+pos_summary <- clust_shots %>% 
+  group_by(Pos) %>% 
+  dplyr::summarise(clust_size=n(), 
+                   Ht_mn = mean(Ht_in), 
+                   Ht_sd = sd(Ht_in),
+                   Wt_mn = mean(Wt), 
+                   Wt_sd = sd(Wt),
+                   sal_mn = mean(Salary/1000000),
+                   sal_sd = sd(Salary/1000000),
+                   exp_mn = mean(Exp),
+                   exp_sd = sd(Exp),
+                   mode_position = names(which.max(table(Pos)))) %>% 
+  add_column(three_pct = three_pct_pos) %>% 
+  add_column(three_att = three_att_pos) %>% 
+  add_column(total_pct = total_pct_pos) %>% 
+  add_column(total_att = total_att_pos)
+
+pct_att3 <- comp_3pct(clust_shots)
+pct_att <- comp_fgpct(clust_shots)
+
+marg_stats <- c("all", 167, mean(clust_shots$Ht_in), sd(clust_shots$Ht_in), 
+  mean(clust_shots$Wt), sd(clust_shots$Wt), 
+  mean(clust_shots$Salary/1000000), sd(clust_shots$Salary/1000000),
+  mean(clust_shots$Exp), sd(clust_shots$Exp), 
+  "",
+  pct_att3_all[[1]], pct_att3_all[[2]], pct_att_all[[1]], pct_att_all[[2]])
+
+pos_summ_combo <- rbind(pos_summary, marg_stats)
+
+
+
+all_pos_summary <- all_joined %>% 
+  group_by(Pos) %>% 
+  dplyr::summarise(clust_size=n(), 
+                   Ht_mn = mean(Ht_in), 
+                   Ht_sd = sd(Ht_in),
+                   Wt_mn = mean(Wt), 
+                   Wt_sd = sd(Wt),
+                   sal_mn = mean(Salary/1000000),
+                   sal_sd = sd(Salary/1000000),
+                   exp_mn = mean(Exp),
+                   exp_sd = sd(Exp),
+                   mode_position = names(which.max(table(Pos)))) %>% 
+  add_column(three_pct = three_pct_posall) %>% 
+  add_column(three_att = three_att_posall) %>% 
+  add_column(total_pct = total_pct_posall) %>% 
+  add_column(total_att = total_att_posall)
+
+pct_att3all <- comp_3pct(all_joined)
+pct_attall <- comp_fgpct(all_joined)
+
+marg_stats <- c("all", 470, mean(all_joined$Ht_in), sd(all_joined$Ht_in), 
+                mean(all_joined$Wt), sd(all_joined$Wt), 
+                mean(all_joined$Salary/1000000), sd(all_joined$Salary/1000000),
+                mean(all_joined$Exp), sd(all_joined$Exp), 
+                "",
+                pct_att3all[[1]], pct_att3all[[2]], pct_attall[[1]], pct_attall[[2]])
+
+pos_summ_combo_all <- rbind(all_pos_summary, marg_stats)
+
+
+clust_dem <- clust_summary %>% select(1:10)
+clust_sh <- clust_summary %>% select(c(1, 12:15))
+
+write.csv(clust_summary, here::here("/data/FINALcluster_summary.csv"))
+
+write.csv(clust_shots %>% arrange(cluster) %>% dplyr::select(c(PLAYER_NAME, cluster)), here::here("data/FINALplayer_assignments.csv"))
+
+load_shots %>% dplyr::select(which(str_detect(colnames(load_shots), "attempt|pct")==TRUE)) %>% names() 
+
+clust_shots %>% arrange(cluster) %>% dplyr::select(c(PLAYER_NAME, cluster))
 
 image(make_adj_mat_grp(imposed_samps1$relab_grps[which.min(dists),]))
 table(imposed_samps1$relab_grps[which.min(dists),])
 image(l[[which.min(dists)]])
 sort(dists)
+
+pnms[which(imposed_samps1$relab_grps[closest_mat, ]==1)]
+
+
+clust_to_row <- function(nms){
+  temp <- paste(nms, '& ')
+  paste(temp, collapse = "")
+}
+clust_to_row(pnms[which(imposed_samps1$relab_grps[closest_mat, ]==1)])
+
+clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(!(cluster %in% c(1, 4, 5, 10))) %>% 
+  group_by(cluster) %>% 
+  ggplot(aes(x=LOC_X, y=LOC_Y, color=zone, shape=EVENT_TYPE)) + 
+  annotation_custom(court, -250, 250, -50, 420) +
+  geom_density_2d() + 
+  facet_wrap(~cluster) + 
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.title = element_blank(),
+        legend.text=element_text(size = 12),
+        plot.title = element_text(size = 17, lineheight = 1.2, face = "bold"))
+
+shotslocs <- ggplot(data=sample_n(shots, 1000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_AREA)) +
+  annotation_custom(court, -250, 250, -50, 420) +
+  geom_density_2d()
+
+
+shotslocs
+
+rezoned_clusts <- clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster, Pos)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC != "Backcourt")
+
+
+
+
+
+ggplot(data=dens_data1,aes(x=LOC_X, y=LOC_Y)) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  ggtitle(paste("Cluster", cl)) +
+  guides(alpha = FALSE, size = FALSE) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_density_2d()+
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.title = element_blank(),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_point(data=data1, aes(x=mean_x, y=mean_y, color=zone)) +
+  geom_text(aes(colour = zone, label = labs1), vjust = 1.2, size = 4, show.legend=F) 
+
+
+# silly ggplot ------------------------------------------------------------
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+region_labs <- c("AB3 Ctr", "AB3 L", "AB3 R", "Paint", "LC3", "MR Ctr", 
+                 "MR LCtr", "MR L", "MR RCtr", "MR R", "RA", "RC3")
+region_full <- c("Above Break 3 Ctr",
+                 "Above Break 3 Left",
+                 "Above Break 3 Right",
+                 "Left Corner 3",
+                 "Mid-Range Ctr",
+                 "Mid-Range Left Ctr",
+                 "Mid-Range Left",
+                 "Mid-Range Right Ctr",
+                 "Restricted Area (RA)",
+                 "Paint (non-RA)",
+                 "Mid-Range Right",
+                 "Right Corner 3")
+
+clust_inds <- c(2, 3, 6, 7, 8, 9, 11, 12, 13)
+dens_color <- "lightsteelblue2"
+tsize <- 3
+gpsize <- 1
+gpshape <- 16
+
+spaceLegend <- 0.75
+
+cl <- clust_inds[1]
+test1 <- comp_zone_pct(clust_shots %>% dplyr::filter(cluster==cl),
+                      rezoned_clusts %>% dplyr::filter(cluster==cl))
+
+dens_data1 <- clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(cluster==cl)
+
+data1 <- data.frame(test1$ctr[2:13,])
+data1$zone <- region_full
+
+labs1 <- paste0(round(test1$pcts, digits=4)*100,'%')
+
+p0 <- ggplot(data=data1, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.5, size = tsize, show.legend=F) +
+  ggtitle(paste("Zones")) +
+  #guides(alpha = FALSE, size = FALSE, 
+  #       color = guide_legend(override.aes = list(size = gpsize), 
+  #                            shape=as.character(1:12))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone), show.legend=T) + 
+  scale_color_manual(labels = region_full, name="Zone", values=gg_color_hue(12)) +
+  #scale_x_continuous(breaks=c(x1,x2,x3), labels=as.character()) + 
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1))
+
+
+p1 <- ggplot(data=data1, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.5, size = tsize, show.legend=F) +
+  ggtitle(paste("Cluster", cl)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) + 
+  scale_color_manual(labels = labs1, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data1,aes(x=-LOC_X, y=LOC_Y),color=dens_color, show.legend = F)
+
+
+cl <- clust_inds[2]
+
+test2 <- comp_zone_pct(clust_shots %>% dplyr::filter(cluster==cl),
+                      rezoned_clusts %>% dplyr::filter(cluster==cl))
+
+data2 <- data.frame(test2$ctr[2:13,])
+data2$zone <- region_full
+
+dens_data2 <- clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(cluster==cl)
+
+
+
+labs2 <- paste0(round(test2$pcts, digits=4)*100,'%')
+
+p2 <- ggplot(data=data2, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.5, size = tsize, show.legend=F) +
+  ggtitle(paste("Cluster", cl)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) +
+  scale_color_manual(labels = labs2, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data2,aes(x=-LOC_X, y=LOC_Y),color=dens_color)
+
+
+cl <- clust_inds[3]
+test3 <- comp_zone_pct(clust_shots %>% dplyr::filter(cluster==cl),
+                      rezoned_clusts %>% dplyr::filter(cluster==cl))
+
+data3 <- data.frame(test3$ctr[2:13,])
+data3$zone <- region_full
+
+labs3 <- paste0(round(test3$pcts, digits=4)*100,'%')
+
+dens_data3 <- clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(cluster==cl)
+
+p3 <- ggplot(data=data3, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.5, size = tsize, show.legend=F) +
+  ggtitle(paste("Cluster", cl)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) +
+  scale_color_manual(labels = labs3, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data3,aes(x=-LOC_X, y=LOC_Y),color=dens_color)
+
+cl <- clust_inds[4]
+test4 <- comp_zone_pct(clust_shots %>% dplyr::filter(cluster==cl),
+                      rezoned_clusts %>% dplyr::filter(cluster==cl))
+
+data4 <- data.frame(test4$ctr[2:13,])
+data4$zone <- region_full
+
+labs4 <- paste0(round(test4$pcts, digits=4)*100,'%')
+
+
+
+dens_data4 <- clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(cluster==cl)
+
+p4 <- ggplot(data=data4, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.5, size = tsize, show.legend=F) +
+  ggtitle(paste("Cluster", cl)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) +
+  scale_color_manual(labels = labs4, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data4,aes(x=-LOC_X, y=LOC_Y),color=dens_color)
+
+cl <- clust_inds[5]
+test5 <- comp_zone_pct(clust_shots %>% dplyr::filter(cluster==cl),
+                      rezoned_clusts %>% dplyr::filter(cluster==cl))
+
+data5 <- data.frame(test5$ctr[2:13,])
+data5$zone <- region_full
+labs5 <- paste0(round(test5$pcts, digits=4)*100,'%')
+
+
+dens_data5 <- clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(cluster==cl)
+
+p5 <- ggplot(data=data5, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+ # geom_text(aes(colour = zone, label = region_labs), vjust = 1.2, size = tsize, show.legend=F) +
+  ggtitle(paste("Cluster", cl)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) +
+  scale_color_manual(labels = labs5, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data5,aes(x=-LOC_X, y=LOC_Y),color=dens_color)
+
+cl <- clust_inds[6]
+test6 <- comp_zone_pct(clust_shots %>% dplyr::filter(cluster==cl),
+                      rezoned_clusts %>% dplyr::filter(cluster==cl))
+
+data6 <- data.frame(test6$ctr[2:13,])
+data6$zone <- region_full
+
+labs6 <- paste0(round(test6$pcts, digits=4)*100,'%')
+
+
+dens_data6 <- clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(cluster==cl)
+
+p6 <- ggplot(data=data6, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.2, size = tsize, show.legend=F) +
+  ggtitle(paste("Cluster", cl)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) +
+  scale_color_manual(labels = labs6, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data6,aes(x=-LOC_X, y=LOC_Y),color=dens_color)
+
+cl <- clust_inds[7]
+test7 <- comp_zone_pct(clust_shots %>% dplyr::filter(cluster==cl),
+                      rezoned_clusts %>% dplyr::filter(cluster==cl))
+
+data7 <- data.frame(test7$ctr[2:13,])
+data7$zone <- region_full
+
+labs7 <- paste0(round(test7$pcts, digits=4)*100,'%')
+
+dens_data7 <- clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(cluster==cl)
+
+
+p7 <- ggplot(data=data7, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.2, size = tsize, show.legend=F) +
+  ggtitle(paste("Cluster", cl)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) +
+  scale_color_manual(labels = labs7, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data7,aes(x=-LOC_X, y=LOC_Y),color=dens_color)
+
+cl <- clust_inds[8]
+test8 <- comp_zone_pct(clust_shots %>% dplyr::filter(cluster==cl),
+                      rezoned_clusts %>% dplyr::filter(cluster==cl))
+
+data8 <- data.frame(test8$ctr[2:13,])
+data8$zone <- region_full
+
+labs8 <- paste0(round(test8$pcts, digits=4)*100,'%')
+
+
+dens_data8 <- clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(cluster==cl)
+
+p8 <- ggplot(data=data8, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.2, size = tsize, show.legend=F) +
+  ggtitle(paste("Cluster", cl)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) +
+  scale_color_manual(labels = labs8, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data8,aes(x=-LOC_X, y=LOC_Y),color=dens_color)
+
+cl <- clust_inds[9]
+test9 <- comp_zone_pct(clust_shots %>% dplyr::filter(cluster==cl),
+                      rezoned_clusts %>% dplyr::filter(cluster==cl))
+
+data9 <- data.frame(test9$ctr[2:13,])
+data9$zone <- region_full
+
+labs9 <- paste0(round(test9$pcts, digits=4)*100,'%')
+
+
+
+dens_data9 <- clust_shots %>% 
+  arrange(cluster) %>% 
+  dplyr::select(c(PLAYER_NAME, cluster)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(cluster==cl)
+
+p9 <- ggplot(data=data9, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.2, size = tsize, show.legend=F) +
+  ggtitle(paste("Cluster", cl)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) +
+  scale_color_manual(labels = labs9, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data9,aes(x=-LOC_X, y=LOC_Y), color=dens_color)
+
+
+
+# end silly ggplot --------------------------------------------------------
+
+
+ten_plot <- ggarrange(p0, p1, p2, p3, 
+                       p4, p5, p6,
+                       p7, p8, p9,
+                       nrow=2, ncol=5, common.legend=F, align="h")
+
+nine_plot <- ggarrange(p1, p2, p3, 
+          p4, p5, p6,
+          p7, p8, p9,
+          nrow=3, ncol=3, common.legend=F)
+annotate_figure(nine_plot, 
+                top = text_grob("Shooting Density and Zone FG%", 
+                                color = "black", face = "bold", size = 14))
+
+
+annotate_figure(ten_plot, 
+                top = text_grob("Shooting Density and Zone FG%", 
+                                color = "black", face = "bold", size = 14))
+
+
+
+
+
+
+
+
+
+# position plots ----------------------------------------------------------
+
+# silly ggplot ------------------------------------------------------------
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+region_labs <- c("AB3 Ctr", "AB3 L", "AB3 R", "Paint", "LC3", "MR Ctr", 
+                 "MR LCtr", "MR L", "MR RCtr", "MR R", "RA", "RC3")
+region_full <- c("Above Break 3 Ctr",
+                 "Above Break 3 Left",
+                 "Above Break 3 Right",
+                 "Left Corner 3",
+                 "Mid-Range Ctr",
+                 "Mid-Range Left Ctr",
+                 "Mid-Range Left",
+                 "Mid-Range Right Ctr",
+                 "Restricted Area (RA)",
+                 "Paint (non-RA)",
+                 "Mid-Range Right",
+                 "Right Corner 3")
+
+position_names <- c("PG", "SG", "SF", "PF", "C")
+
+dens_color <- "lightsteelblue2"
+tsize <- 3
+gpsize <- 1
+gpshape <- 16
+
+spaceLegend <- 0.75
+
+test0 <- comp_zone_pct(clust_shots,
+                       rezoned_clusts)
+
+dens_data0 <- clust_shots %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(zone != "Above the Break 3 Back Court(BC)") %>% 
+  data.frame()
+
+data0 <- data.frame(test0$ctr[2:13,])
+data0$zone <- region_full
+
+labs0 <- paste0(round(test0$pcts, digits=4)*100,'%')
+
+
+p0 <- ggplot(data=dens_data0, aes(x=-LOC_X, y=LOC_Y, color=zone)) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  geom_point( show.legend=T, shape="." ) + 
+  geom_text(data=data0, aes(x=-mean_x, y=-mean_y, label = region_full), 
+            vjust = 1.5, size = 5, show.legend=F) +
+  ggtitle(paste("All Shots")) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1))# +
+ # geom_density_2d(data=dens_data0,aes(x=-LOC_X, y=LOC_Y),color=dens_color, show.legend = F)
+
+p0
+
+
+
+region_full <- c("Above Break 3 Ctr",
+                 "Above Break 3 Left",
+                 "Above Break 3 Right",
+                 "Paint (non-RA)",
+                 "Left Corner 3",
+                 "Mid-Range Ctr",
+                 "Mid-Range Left Ctr",
+                 "Mid-Range Left",
+                 "Mid-Range Right Ctr",
+                 "Mid-Range Right",
+                 "Restricted Area",
+                 "Right Corner 3")
+
+
+
+p00 <- ggplot(data=data0, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  ggtitle("All Player Shots") +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  #geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) + 
+  #scale_color_manual(labels = labs1, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_point(data=dens_data0,aes(x=-LOC_X, y=LOC_Y, color=zone), show.legend = F, shape='.') +
+  geom_text(aes(label = region_full), color = 'grey3', size = 5, show.legend=F)
+
+p00
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ps <- position_names[1]
+test1 <- comp_zone_pct(clust_shots %>% dplyr::filter(Pos==ps),
+                       rezoned_clusts %>% dplyr::filter(Pos==ps))
+
+dens_data1 <- clust_shots %>% 
+  arrange(Pos) %>% 
+  dplyr::select(c(PLAYER_NAME, Pos)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(Pos==ps)
+
+data1 <- data.frame(test1$ctr[2:13,])
+data1$zone <- region_full
+
+labs1 <- paste0(round(test1$pcts, digits=4)*100,'%')
+
+
+p1 <- ggplot(data=data1, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.5, size = tsize, show.legend=F) +
+  ggtitle(paste("Position:", ps)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) + 
+  scale_color_manual(labels = labs1, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data1,aes(x=-LOC_X, y=LOC_Y),color=dens_color, show.legend = F)
+
+ps <- position_names[2]
+test2 <- comp_zone_pct(clust_shots %>% dplyr::filter(Pos==ps),
+                       rezoned_clusts %>% dplyr::filter(Pos==ps))
+
+dens_data2 <- clust_shots %>% 
+  arrange(Pos) %>% 
+  dplyr::select(c(PLAYER_NAME, Pos)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(Pos==ps)
+
+data2 <- data.frame(test2$ctr[2:13,])
+data2$zone <- region_full
+
+labs2 <- paste0(round(test2$pcts, digits=4)*100,'%')
+
+
+p2 <- ggplot(data=data2, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.5, size = tsize, show.legend=F) +
+  ggtitle(paste("Position:", ps)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) + 
+  scale_color_manual(labels = labs2, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data2,aes(x=-LOC_X, y=LOC_Y),color=dens_color, show.legend = F)
+
+ps <- position_names[3]
+test3 <- comp_zone_pct(clust_shots %>% dplyr::filter(Pos==ps),
+                       rezoned_clusts %>% dplyr::filter(Pos==ps))
+
+dens_data3 <- clust_shots %>% 
+  arrange(Pos) %>% 
+  dplyr::select(c(PLAYER_NAME, Pos)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(Pos==ps)
+
+data3 <- data.frame(test3$ctr[2:13,])
+data3$zone <- region_full
+
+labs3 <- paste0(round(test3$pcts, digits=4)*100,'%')
+
+
+p3 <- ggplot(data=data3, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.5, size = tsize, show.legend=F) +
+  ggtitle(paste("Position:", ps)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) + 
+  scale_color_manual(labels = labs3, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data3,aes(x=-LOC_X, y=LOC_Y),color=dens_color, show.legend = F)
+
+p3
+
+ps <- position_names[4]
+test4 <- comp_zone_pct(clust_shots %>% dplyr::filter(Pos==ps),
+                       rezoned_clusts %>% dplyr::filter(Pos==ps))
+
+dens_data4 <- clust_shots %>% 
+  arrange(Pos) %>% 
+  dplyr::select(c(PLAYER_NAME, Pos)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(Pos==ps)
+
+data4 <- data.frame(test4$ctr[2:13,])
+data4$zone <- region_full
+
+labs4 <- paste0(round(test4$pcts, digits=4)*100,'%')
+
+
+p4 <- ggplot(data=data4, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.5, size = tsize, show.legend=F) +
+  ggtitle(paste("Position:", ps)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) + 
+  scale_color_manual(labels = labs4, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data4,aes(x=-LOC_X, y=LOC_Y),color=dens_color, show.legend = F)
+
+
+p4
+
+ggarrange(p00, p4)
+
+gg_color_hue(12)
+
+ps <- position_names[5]
+test5 <- comp_zone_pct(clust_shots %>% dplyr::filter(Pos==ps),
+                       rezoned_clusts %>% dplyr::filter(Pos==ps))
+
+dens_data5 <- clust_shots %>% 
+  arrange(Pos) %>% 
+  dplyr::select(c(PLAYER_NAME, Pos)) %>% 
+  left_join(rezoned_shots) %>% 
+  dplyr::filter(SHOT_ZONE_BASIC!='Backcourt') %>% 
+  dplyr::filter(Pos==ps)
+
+data5 <- data.frame(test5$ctr[2:13,])
+data5$zone <- region_full
+
+labs5 <- paste0(round(test5$pcts, digits=4)*100,'%')
+
+
+p5 <- ggplot(data=data5, aes(x=-mean_x, y=mean_y), color=zone) +
+  annotation_custom(court, -250, 250, -52, 418) +
+  #geom_text(aes(colour = zone, label = region_labs), vjust = 1.5, size = tsize, show.legend=F) +
+  ggtitle(paste("Position:", ps)) +
+  guides(alpha = FALSE, size = FALSE, 
+         shape = guide_legend(override.aes = list(size = gpsize)),
+         color = guide_legend(override.aes = list(size = gpsize))) +
+  xlim(250, -250) +
+  ylim(-52, 418) +
+  coord_fixed() +
+  geom_point(aes(color=zone, size=gpsize), show.legend=T, shape=gpshape) + 
+  scale_color_manual(labels = labs5, values=gg_color_hue(12), name="Zone FG%") +
+  theme(line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.key.size = unit(spaceLegend, "lines"),
+        plot.title = element_text(size = 12, lineheight = 1)) +
+  geom_density_2d(data=dens_data5,aes(x=-LOC_X, y=LOC_Y),color=dens_color, show.legend = F)
+
+p5
+
+# end silly ggplot --------------------------------------------------------
+
+
+
+posplot <- ggarrange( p1, p2, p3, p4, nrow=2, ncol=2)
+
+annotate_figure(posplot, 
+                top = text_grob("Shooting Density and Zone FG%", 
+                                color = "black", face = "bold", size = 14))
+
+
+
+# end position plots ------------------------------------------------------
+
+
+zsamp1[1,]
+
+clust_count <- rep(0, times=30000)
+for(i in 1:15000){
+  clust_count[i] <- length(unique(zsamp1[i+5000,]))
+  clust_count[i+15000] <- length(unique(zsamp2[i+5000,]))
+}
+
+
+
+ggplot(data = data.frame(clust_count), aes(x=clust_count) ) + 
+  geom_histogram() +
+  ggtitle("Histogram of Number of Clusters in Each Sample") +
+  xlab("Clusters in Sample") +
+  ylab("Count")+
+  theme_bw()
+
+mean(clust_count)
+sd(clust_count)
+
+
+
 
 # belwo this is the two cluster stuff -------------------------------------
 
