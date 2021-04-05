@@ -11,10 +11,10 @@ library(igraph)
 
 
 load_shots <- readRDS(here::here("/saved_robjs/joined_shots"))
-design_shooting <- readRDS(here("/saved_robjs/design_shooting"))
+design_shooting <- readRDS(here::here("/saved_robjs/design_shooting"))
 
 player_mat <- load_shots %>% 
-  select("Exp", "Salary") %>% 
+  dplyr::select("Exp", "Salary") %>% 
   mutate_if(is.character, as.numeric) %>% 
   mutate(Salary = Salary/1000000) %>% 
   mutate(Exp2 = Exp^2, Salary2 = Salary^2) %>% 
@@ -140,8 +140,8 @@ write.csv(data.frame(design_shooting1), here("moranbasis.csv"))
 shots_code <- nimbleCode({
 
   
-  #alpha ~ dgamma(1, 1)
-  clust[1:n_players] ~ dCRP(0.1, size=n_players)
+  alpha ~ dgamma(.25, 1)
+  clust[1:n_players] ~ dCRP(alpha, size=n_players)
   
   for(i in 1:M) {
     betas[i, 1:5] ~ dmnorm(mean=zero_5[1:5], cov=id_5[1:5,1:5])
@@ -149,7 +149,8 @@ shots_code <- nimbleCode({
   }
   
   for(i in 1:n_zones){
-    sigma[i] ~ dinvgamma(.01, .01)
+    #sigma[i] ~ dinvgamma(.01, .01)
+    sigma[i] ~ dinvgamma(.25, .25)
   }
   
   for(player in 1:n_players){
@@ -221,14 +222,14 @@ mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
                        data = data, inits = inits,
                        nchains = 2, niter = 20000,
                        summary = TRUE, WAIC = FALSE,
-                       monitors = c('alphas','betas',
+                       monitors = c('alphas','betas', 'alpha',
                                      'mu', 'eta', 'clust',
                                     'scale_eff', 'rand_eff'))#,
                                    # 'player_alph', 'player_beta'))
 # 
 # 
 
-saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_fixedalphpt1"))
+saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525"))
 
 player_name <- load_shots$PLAYER_NAME
 param_nm <- rownames(mcmc.outiw$summary$all.chains)
@@ -344,12 +345,12 @@ for(i in 1:15000){
 }
 hist(clust_count[8001:16000])
 table(clust_count[1:8000])
-
+hist(clust_count)
 hist(clust_count[15001:30000])
 
 mean(clust_count)
 unique(clust_count)
-table(clust_count)
+table(zsamp1[3000,])
 c(table(zsamp1))
 c(table(zsamp2))
 
