@@ -11,6 +11,9 @@ library(multisensi)
 library(stringi)
 library(fda)
 library(here)
+library(BasketballAnalyzeR)
+library(grid)
+library(jpeg)
 
 # load data ---------------------------------------------------------------
 
@@ -38,14 +41,27 @@ rezoned_shots <- shots %>%
                        SHOT_ZONE_BASIC, 
                        paste(SHOT_ZONE_BASIC, SHOT_ZONE_AREA)))
 
+saveRDS(rezoned_shots, here::here("/saved_robjs/rezoned_shots"))
 
 # visualize zones ---------------------------------------------------------
+# half court image
+courtImg.URL <- "https://thedatagame.files.wordpress.com/2016/03/nba_court.jpg"
+court <- rasterGrob(readJPEG(getURLContent(courtImg.URL)),
+                    width=unit(1,"npc"), height=unit(1,"npc"))
+
+
 
 # see regions based on SHOT_ZONE_BASIC/SHOT_ZONE_AREA
 # basic seems to be the one that's more useful
 ggplot(data=sample_n(shots, 1000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_BASIC)) + geom_point()
-ggplot(data=sample_n(shots, 1000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_AREA)) + geom_point()
-ggplot(data=sample_n(rezoned_shots, 4000), aes(x=LOC_X, y=LOC_Y, color=zone)) + geom_point()
+shotslocs <- ggplot(data=sample_n(shots, 1000), aes(x=LOC_X, y=LOC_Y, color=SHOT_ZONE_AREA)) +
+  annotation_custom(court, -250, 250, -50, 420) +
+  geom_point()
+rz_locs <- ggplot(data=sample_n(rezoned_shots %>% dplyr::filter(LOC_Y < 500), 1000), aes(x=LOC_X, y=LOC_Y, color=zone)) +
+  annotation_custom(court, -250, 250, -50, 420) +
+  geom_point()
+
+
 
 list_rezoned_shots <- rezoned_shots %>% 
   dplyr::select(PLAYER_NAME, PLAYER_ID, EVENT_TYPE, SHOT_MADE_FLAG, zone) %>% 
@@ -160,17 +176,27 @@ wide_rezoned_shots_nobc <- wide_rezoned_shots %>%
   dplyr::select(!contains("bc")) %>% 
   filter_at((vars(ends_with("attempt"))), all_vars(. > 3)) 
 
+
+all_rezoned_shots_nobc <- wide_rezoned_shots %>% 
+  dplyr::select(!contains("bc"))
+
 dim(wide_rezoned_shots_nobc)
 
 "Timothe Luwawu-Cabarrot" %in% wide_rezoned_shots$PLAYER_NAME
 
 str_ht_to_in <- function(str_ht){
-  split <- strsplit(str_ht, "-")
+  ret_vec <- rep(0, times=length(str_ht))
   
-  ft <- as.numeric(split[[1]][1])
-  inch <- as.numeric(split[[1]][2])
+  for(i in 1:length(str_ht)){
+    split <- strsplit(str_ht[i], "-")
   
-  return(ft*12 + inch)
+    ft <- as.numeric(split[[1]][1])
+    inch <- as.numeric(split[[1]][2])
+  
+    ret_vec[i] <- 12*ft + inch
+  }
+  
+  return(ret_vec)
 }
 
 
@@ -183,7 +209,11 @@ joined_shots <- left_join(wide_rezoned_shots_nobc, joined_inf,
   group_by(PLAYER_NAME) %>% 
   slice(1) %>% 
   ungroup() %>% 
-  dplyr::mutate(Ht_in = str_ht_to_in(Ht))
+  dplyr::mutate(Ht_in = str_ht_to_in(Ht)) %>% 
+  dplyr::mutate(Wt = as.numeric(Wt)) %>% 
+  dplyr::mutate(Exp = as.numeric(Exp))
+
+joined_shots$Wt
 
 joined_shots_full <- left_join(wide_rezoned_shots, joined_inf, 
                           by = c("PLAYER_NAME" = "Player")) %>% 
@@ -191,6 +221,16 @@ joined_shots_full <- left_join(wide_rezoned_shots, joined_inf,
   group_by(PLAYER_NAME) %>% 
   slice(1) %>% 
   ungroup()
+
+all_joined <- left_join(all_rezoned_shots_nobc, joined_inf, 
+                        by = c("PLAYER_NAME" = "Player")) %>% 
+  drop_na() %>% 
+  group_by(PLAYER_NAME) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  dplyr::mutate(Ht_in = str_ht_to_in(Ht)) %>% 
+  dplyr::mutate(Wt = as.numeric(Wt)) %>% 
+  dplyr::mutate(Exp = as.numeric(Exp))
 
 
 curry_atts <- joined_shots %>% 
