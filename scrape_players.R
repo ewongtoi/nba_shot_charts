@@ -9,7 +9,8 @@ library(stringi)
 
 
 # player info (ht, wt, etc) -----------------------------------------------
-nba_reg <- read_csv(here("nba_ref_summary.txt"))
+# txt of https://www.basketball-reference.com/leagues/NBA_2019_shooting.html
+nba_reg <- read_csv(here("/data/nba_ref_summary.txt"))
 
 team_abbrv <- nba_reg %>% select(5) %>% unique() %>% slice(c(2:14, 16:32))
 
