@@ -86,6 +86,7 @@ MoransI.Basis<-function(X,r,A){
 
 
 
+
 new_basis <- matrix(0, nrow=12, ncol=12)
 ab3c  <- c(1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0)
 ab3lc <- c(1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0)
