@@ -39,29 +39,29 @@ as.matrix(dist(small13, "euclidean"))
 # probably want to take demar, steph, kat (reasonably distant)
 interesting_3 <- c("Stephen Curry", "DeMar DeRozan", "Karl-Anthony Towns")
 
-small13$player_name <- thirteenclub$PLAYER_NAME
+small13$Player <- thirteenclub$PLAYER_NAME
 
 df_att <- melt(small13 %>% 
-            dplyr::filter(player_name %in% interesting_3) %>% 
-            dplyr::select(ends_with("attempt") | "player_name"), 
+            dplyr::filter(Player %in% interesting_3) %>% 
+            dplyr::select(ends_with("attempt") | "Player"), 
           shot = colnames(smallthirteen), 
           variable.name="shot")
 
 df_pct <- melt(small13 %>% 
-                 dplyr::filter(player_name %in% interesting_3) %>% 
-                 dplyr::select(ends_with("pct") | "player_name"), 
+                 dplyr::filter(Player %in% interesting_3) %>% 
+                 dplyr::select(ends_with("pct") | "Player"), 
                shot = colnames(smallthirteen), 
                variable.name="shot")
 
 
-ggplot(df_att, aes(shot, value, fill=player_name)) + 
+ggplot(df_att, aes(shot, value, fill=Player)) + 
   geom_bar(position="dodge",stat="identity") +
   theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) + 
   ggtitle("Shot attempts by region") + 
   ylab("Attempts") + 
   xlab("Court Region")
 
-ggplot(df_pct, aes(shot, value, fill=player_name)) + 
+ggplot(df_pct, aes(shot, value, fill=Player)) + 
   geom_bar(position="dodge",stat="identity") +
   theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) + 
   ggtitle("Percentages by region") + 
