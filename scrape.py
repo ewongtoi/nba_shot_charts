@@ -1,6 +1,7 @@
 # largely borrowing from 
 # https://datavizardry.com/2020/01/28/nba-shot-charts-part-1/
 
+# %% 
 # from nba_api.stats.endpoints import shotchartdetail
 import simplejson as json
 import pandas as pd
@@ -42,7 +43,7 @@ import requests
 
 
 
-
+# %%
 url_base = 'https://stats.nba.com/stats/shotchartdetail'
 
 headers_data = {
@@ -118,10 +119,12 @@ df = pd.DataFrame(rows)
 df.columns = headers
 df.shape
 
+# %%
 # write to csv file
-df.to_csv('C:/Users/ewong/Documents/GitHub/nba_shot_charts/my_nba_shotchartdetail_2018-19.csv', index=False)
+df.to_csv('/Users/eliotwong-toi/Documents/uci/nba_shot_charts/my_nba_shotchartdetail_2019-20.csv', index=False)
 
-
+'''
+# %%
 response_post = requests.get(url_base, params=parameters2, headers=headers_data)
 content_post = json.loads(response_post.content)
 
@@ -133,3 +136,4 @@ df_post.columns = headers_post
 df_post.shape
 
 df_post.to_csv('C:/Users/ewong/Documents/GitHub/nba_shot_charts/nba_shotchartdetail_2018-19_postseason.csv', index=False)
+'''
