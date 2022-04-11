@@ -230,7 +230,7 @@ mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
 # 
 # 
 
-saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525"))
+saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525_redo"))
 
 player_name <- load_shots$PLAYER_NAME
 param_nm <- rownames(mcmc.outiw$summary$all.chains)
