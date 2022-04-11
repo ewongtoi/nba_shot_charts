@@ -9,9 +9,9 @@ library(tidyr)
 library(robustHD)
 library(igraph)
 
-
-load_shots <- readRDS(here::here("/saved_robjs/joined_shots"))
-design_shooting <- readRDS(here::here("/saved_robjs/design_shooting"))
+print(here::here("saved_robjs/joined_shots"))
+load_shots <- readRDS(here::here("saved_robjs/joined_shots"))
+design_shooting <- readRDS(here::here("saved_robjs/design_shooting"))
 
 player_mat <- load_shots %>% 
   dplyr::select("Exp", "Salary") %>% 
@@ -25,6 +25,8 @@ player_names <- load_shots %>% dplyr::select(PLAYER_NAME) %>% c()
 
 M <- 30
 n_players <- load_shots %>% nrow()
+
+
 n_zones <- 12
 set.seed(225)
 mu <- matrix(rnorm(n_players * n_zones), nrow = n_players, ncol = n_zones)
@@ -122,7 +124,7 @@ new_basis == t(new_basis)
 
 new_basis1 <- new_basis - diag(12)
 
-write.csv(data.frame(new_basis1), here("adjacency_basis1.csv"))
+# write.csv(data.frame(new_basis1), here("adjacency_basis1.csv"))
 
 #intercept only model
 X = matrix(1,12,1)
@@ -136,7 +138,7 @@ for(i in 1:5){
   design_shooting1[, i] <- (Psi[, i] - mean(Psi[, i]))/sd(Psi[,i])
 }
 
-write.csv(data.frame(design_shooting1), here("moranbasis.csv"))
+# write.csv(data.frame(design_shooting1), here("moranbasis.csv"))
 
 shots_code <- nimbleCode({
 
@@ -230,78 +232,43 @@ mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
 # 
 # 
 
+
 saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525_redo"))
 
-player_name <- load_shots$PLAYER_NAME
-param_nm <- rownames(mcmc.outiw$summary$all.chains)
-mcmcout_median_ab <- as_tibble(mcmc.outiw$summary$all.chains) %>% 
-  add_column(param_nm, .before="Mean") %>% 
-  dplyr::filter(str_detect(param_nm, "^beta|^alpha")) %>% 
-  mutate(player_ind = as.numeric(str_extract(param_nm, "(?<=\\[)(.*?)(?=,)"))) %>% 
-  mutate(zone = as.numeric(str_extract(param_nm, "(?<=,)(.*?)(?=\\])"))) %>% 
-  mutate(param = str_extract(param_nm, "(.*?)(?=\\[)")) %>%
-  arrange(.group_by=player_ind) %>% 
-  dplyr::select(c(player_ind,Median, zone, param)) %>% 
-  pivot_wider(names_from=c(zone, param), values_from=Median) %>% 
-  add_column(player_name, .before="player_ind")
+
+#player_name <- load_shots$PLAYER_NAME
+#param_nm <- rownames(mcmc.outiw$summary$all.chains)
+#mcmcout_median_ab <- as_tibble(mcmc.outiw$summary$all.chains) %>% 
+#  add_column(param_nm, .before="Mean") %>% 
+#  dplyr::filter(str_detect(param_nm, "^beta|^alpha")) %>% 
+#  mutate(player_ind = as.numeric(str_extract(param_nm, "(?<=\\[)(.*?)(?=,)"))) %>% 
+#  mutate(zone = as.numeric(str_extract(param_nm, "(?<=,)(.*?)(?=\\])"))) %>% 
+#  mutate(param = str_extract(param_nm, "(.*?)(?=\\[)")) %>%
+#  arrange(.group_by=player_ind) %>% 
+#  dplyr::select(c(player_ind,Median, zone, param)) %>% 
+#  pivot_wider(names_from=c(zone, param), values_from=Median) %>% 
+#  add_column(player_name, .before="player_ind")
 
 
-mcmcout_median_ab <- as_tibble(mcmc.outiw$summary$all.chains) %>% 
-  add_column(param_nm, .before="Mean") %>% 
-  filter(str_detect(param_nm, "^beta|^alpha|^player")) %>% 
-  mutate(param = str_extract(param_nm, "(.*?)(?=\\[)"))
+#mcmcout_median_ab <- as_tibble(mcmc.outiw$summary$all.chains) %>% 
+#  add_column(param_nm, .before="Mean") %>% 
+#  filter(str_detect(param_nm, "^beta|^alpha|^player")) %>% 
+#  mutate(param = str_extract(param_nm, "(.*?)(?=\\[)"))
 
-view(mcmcout_tib)
-View(mcmcout_median_ab)
-mcmcout_tib
-as.numeric(str_extract("[23,", "(?<=\\[)(.*?)(?=,)"))
+#view(mcmcout_tib)
+#View(mcmcout_median_ab)
+#mcmcout_tib
+#as.numeric(str_extract("[23,", "(?<=\\[)(.*?)(?=,)"))
 
-plot(mcmc.outiw$samples$chain1[1:10000, 180])
+#plot(mcmc.outiw$samples$chain1[1:10000, 180])
 
-write.csv(mcmcout_median_ab2, "mcmc_medians_ab2.csv")
+# write.csv(mcmcout_median_ab2, "mcmc_medians_ab2.csv")
 # unsure if this works (paralllel) ----------------------------------------
 
 
-shots_const <- constants
-shots_inits <- inits
+# shots_const <- constants
+# shots_inits <- inits
 
-this_cluster <- makeCluster(4)
-
-
-run_MCMC_allcode <- function(seed, data) {
-  library(nimble)
-  
-  myModel <- nimbleModel(code = shots_code,
-                         data = data$data,
-                         constants = data$const,
-                         inits = data$inits)
-  
-  CmyModel <- compileNimble(myModel)
-  
-  myMCMC <- buildMCMC(CmyModel)
-  CmyMCMC <- compileNimble(myMCMC)
-  
-  results <- runMCMC(CmyMCMC, niter = 10000, setSeed = seed)
-  
-  return(results)
-}
-chain_output <- parLapply(cl = this_cluster, X = 1:4, 
-                          fun = run_MCMC_allcode, 
-                          MoreArgs = list(data=data, const=constants, inits=inits))
-stopCluster(this_cluster)
-par(mfrow = c(2,2))
-for (i in 1:4) {
-  this_output <- chain_output[[i]]
-  plot(this_output[,"b"], type = "l", ylab = 'b')
-}
-
-
-
-
-
-plot(mcmc.out10$samples$chain1[,3000:1000])
-view(mcmc.out10$samples$chain1)
-View(mcmc.out$summary$all.chains)
 
 
 # 
@@ -330,130 +297,64 @@ View(mcmc.out$summary$all.chains)
 #                  max_treedepth = 12)
 # )
 
-
-
-mcmc.outiw$samples$chain1[ , grep('z', colnames(mcmc.outiw$samples$chain1))]
-
-
-dim(mcmc.out$samples$chain2[ , grep('z', colnames(mcmc.out$samples$chain1))])
-zsamp1 <- mcmc.out$samples$chain1[ , grep('clust', colnames(mcmc.out$samples$chain1))]
-zsamp2 <- mcmc.out$samples$chain2[ , grep('clust', colnames(mcmc.out$samples$chain2))]
-zsamptot <- rbind(zsamp1, zsamp2)
-clust_count <- rep(0, times=30000)
-for(i in 1:15000){
-  clust_count[i] <- length(unique(zsamp1[i+5000, ]))
-  clust_count[i+ 15000] <- length(unique(zsamp2[i+5000, ]))
-}
-hist(clust_count[8001:16000])
-table(clust_count[1:8000])
-hist(clust_count)
-hist(clust_count[15001:30000])
-
-mean(clust_count)
-unique(clust_count)
-table(zsamp1[3000,])
-c(table(zsamp1))
-c(table(zsamp2))
+# zsamp1 <- mcmc.out$samples$chain1[ , grep('clust', colnames(mcmc.out$samples$chain1))]
+# zsamp2 <- mcmc.out$samples$chain2[ , grep('clust', colnames(mcmc.out$samples$chain2))]
+# zsamptot <- rbind(zsamp1, zsamp2)
+# clust_count <- rep(0, times=30000)
+# for(i in 1:15000){
+#   clust_count[i] <- length(unique(zsamp1[i+5000, ]))
+#   clust_count[i+ 15000] <- length(unique(zsamp2[i+5000, ]))
+# }
 
 
 
-make_adj_mat_grp <- function(member_list){
-  n <- length(member_list)
+# make_adj_mat_grp <- function(member_list){
+#   n <- length(member_list)
   
-  adj_mat <- matrix(0, nrow=n, ncol=n)
+#   adj_mat <- matrix(0, nrow=n, ncol=n)
   
-  for(i in 1:n){
-    adj_mat[,i] = (member_list == member_list[i]) * member_list[i]
-  }
+#   for(i in 1:n){
+#     adj_mat[,i] = (member_list == member_list[i]) * member_list[i]
+#   }
   
-  rownames(adj_mat) <- player_names[[1]]
-  colnames(adj_mat) <- player_names[[1]]
+#   rownames(adj_mat) <- player_names[[1]]
+#   colnames(adj_mat) <- player_names[[1]]
   
   
-  return(adj_mat)
+#   return(adj_mat)
   
-}
-
-table(zsamp1[6395,])
-
-image(make_adj_mat_grp(zsamp1[6395,]))
-max(zsamp1[6395,])
-make_adj_mat_grp(zsamp1[6395,])
-
-sum(zsamp1[6395,]==1)
-
-
-test_mat <- make_adj_mat(zsamp1[1000,])
+# }
 
 
 
 
-test_graph <- graph_from_adjacency_matrix(l[13060])
-plot(test_graph)
-max(zsamp1[1000,])
+# N <- 16000
+# l <- vector("list", N)
 
-
-image(l[[13149]])
-
-l[[1302]][40:50, 40:50]
-
-mean(l[[1302]])
-
-
-mean(clust_count)
-
-N <- 16000
-l <- vector("list", N)
-
-sum_mat <- matrix(0, n_players, n_players)
-for(z in 1:8000){
-  l[[z]] <- make_adj_mat(zsamp1[z+2000, ])
-  l[[z + 8000]] <- make_adj_mat(zsamp2[z+2000, ])
+# sum_mat <- matrix(0, n_players, n_players)
+# for(z in 1:8000){
+#   l[[z]] <- make_adj_mat(zsamp1[z+2000, ])
+#   l[[z + 8000]] <- make_adj_mat(zsamp2[z+2000, ])
   
-  sum_mat <- l[[z]] + l[[z + 8000]] + sum_mat
-}
+#   sum_mat <- l[[z]] + l[[z + 8000]] + sum_mat
+# }
 
 
-mean_mat <- sum_mat/16000
+# mean_mat <- sum_mat/16000
 
-mean_mat[1:10, 1:10]
 
-image(mean_mat)
+# close_mat <- l[[1]]
 
-close_mat <- l[[1]]
-
-min_dist <- 10000
-dists <- rep(0, 16000)
-for(z in 1:16000){
+# min_dist <- 10000
+# dists <- rep(0, 16000)
+# for(z in 1:16000){
   
-  diff <- mean_mat - l[[z]]
-  ss <- mean(diff^2)
-  dists[z] = ss
-}
+#   diff <- mean_mat - l[[z]]
+#   ss <- mean(diff^2)
+#   dists[z] = ss
+# }
 
 
-# closest is at 13060; converts to 13060-8000+2000
-mean(zsamp2[7060,] == l[[13060]])
+print("done")
+#write.csv(mean_mat, here("mean_adj_mat.csv"))
 
-image(l[[13060]])
-sum(l[[13060]])/(167)
-
-dim(test_mat)
-library(ggplot2)
-ggplot(data.frame(test_mat), aes(x = from, y = to, fill = group)) +
-  geom_raster() +
-  theme_bw() +
-  # Because we need the x and y axis to display every node,
-  # not just the nodes that have connections to each other,
-  # make sure that ggplot does not drop unused factor levels
-  scale_x_discrete(drop = FALSE) +
-  scale_y_discrete(drop = FALSE) +
-  theme(
-    # Rotate the x-axis lables so they are legible
-    axis.text.x = element_text(angle = 270, hjust = 0),
-    # Force the plot into a square aspect ratio
-    aspect.ratio = 1,
-    # Hide the legend (optional)
-    legend.position = "none")
-
-write.csv(mean_mat, here("mean_adj_mat.csv"))
