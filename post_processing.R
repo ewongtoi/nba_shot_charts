@@ -12,7 +12,7 @@ library(RCurl)
 library(gridExtra)
 library(xtable)
 
-samples <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525"))
+samples <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525_redo"))
 load_shots <- readRDS(here::here("/saved_robjs/joined_shots"))
 rezoned_shots <- readRDS(here::here("/saved_robjs/rezoned_shots"))
 
