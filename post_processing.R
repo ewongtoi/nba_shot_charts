@@ -13,9 +13,12 @@ library(gridExtra)
 library(xtable)
 library(openxlsx)
 
-samples <- readRDS(here::here("saved_robjs/1819/samps_moran_randeff_alphapt25sigma2525"))
-load_shots <- readRDS(here::here("saved_robjs/1819/joined_shots"))
-rezoned_shots <- readRDS(here::here("saved_robjs/1819/rezoned_shots_1819"))
+
+
+samples <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525_redo"))
+load_shots <- readRDS(here::here("/saved_robjs/joined_shots"))
+rezoned_shots <- readRDS(here::here("/saved_robjs/rezoned_shots"))
+
 
 
 courtImg.URL <- "https://thedatagame.files.wordpress.com/2016/03/nba_court.jpg"

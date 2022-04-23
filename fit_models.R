@@ -232,33 +232,38 @@ mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
 # 
 # 
 
-saveRDS(mcmc.out, here("saved_robjs/1819/samps_moran_randeff_alphapt25sigma2525_100plus-2"))
 
 
 #####----- analysis (don't run this leave it to post_proc.R)
-player_name <- load_shots$PLAYER_NAME
-param_nm <- rownames(mcmc.out$summary$all.chains)
-mcmcout_median_ab <- as_tibble(mcmc.out$summary$all.chains) %>% 
-  add_column(param_nm, .before="Mean") %>% 
-  dplyr::filter(str_detect(param_nm, "^beta|^alpha")) %>% 
-  mutate(player_ind = as.numeric(str_extract(param_nm, "(?<=\\[)(.*?)(?=,)"))) %>% 
-  mutate(zone = as.numeric(str_extract(param_nm, "(?<=,)(.*?)(?=\\])"))) %>% 
-  mutate(param = str_extract(param_nm, "(.*?)(?=\\[)")) %>%
-  arrange(.group_by=player_ind) %>% 
-  dplyr::select(c(player_ind,Median, zone, param)) %>% 
-  pivot_wider(names_from=c(zone, param), values_from=Median) %>% 
-  add_column(player_name, .before="player_ind")
 
 
-mcmcout_median_ab <- as_tibble(mcmc.out$summary$all.chains) %>% 
-  add_column(param_nm, .before="Mean") %>% 
-  filter(str_detect(param_nm, "^beta|^alpha|^player")) %>% 
- mutate(param = str_extract(param_nm, "(.*?)(?=\\[)"))
 
-view(mcmcout_tib)
-View(mcmcout_median_ab)
+saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525_redo"))
+
+
+#player_name <- load_shots$PLAYER_NAME
+#param_nm <- rownames(mcmc.outiw$summary$all.chains)
+#mcmcout_median_ab <- as_tibble(mcmc.outiw$summary$all.chains) %>% 
+#  add_column(param_nm, .before="Mean") %>% 
+#  dplyr::filter(str_detect(param_nm, "^beta|^alpha")) %>% 
+#  mutate(player_ind = as.numeric(str_extract(param_nm, "(?<=\\[)(.*?)(?=,)"))) %>% 
+#  mutate(zone = as.numeric(str_extract(param_nm, "(?<=,)(.*?)(?=\\])"))) %>% 
+#  mutate(param = str_extract(param_nm, "(.*?)(?=\\[)")) %>%
+#  arrange(.group_by=player_ind) %>% 
+#  dplyr::select(c(player_ind,Median, zone, param)) %>% 
+#  pivot_wider(names_from=c(zone, param), values_from=Median) %>% 
+#  add_column(player_name, .before="player_ind")
+
+
+#mcmcout_median_ab <- as_tibble(mcmc.outiw$summary$all.chains) %>% 
+#  add_column(param_nm, .before="Mean") %>% 
+#  filter(str_detect(param_nm, "^beta|^alpha|^player")) %>% 
+#  mutate(param = str_extract(param_nm, "(.*?)(?=\\[)"))
+
+#view(mcmcout_tib)
+#View(mcmcout_median_ab)
+
 #mcmcout_tib
-as.numeric(str_extract("[23,", "(?<=\\[)(.*?)(?=,)"))
 
 plot(mcmc.out$samples$chain1[1:10000, 180])
 
@@ -348,7 +353,7 @@ close_mat <- l[[1]]
 min_dist <- 10000
 dists <- rep(0, 16000)
 for(z in 1:16000){
-  
+
   diff <- mean_mat - l[[z]]
   ss <- mean(diff^2)
   dists[z] = ss
@@ -357,3 +362,4 @@ for(z in 1:16000){
 
 print("done")
 #write.csv(mean_mat, here("mean_adj_mat.csv"))
+
