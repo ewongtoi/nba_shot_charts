@@ -6,15 +6,16 @@ library(plyr)
 library(cowplot)
 library(grid)
 #library(Rmisc)
-#library(ggpubr)
+library(ggpubr)
 library(jpeg)
 library(RCurl)
 library(gridExtra)
 library(xtable)
+library(openxlsx)
 
-samples <- readRDS(here::here("nba_shot_charts/saved_robjs/samps_moran_randeff_alphapt25sigma2525_cluster"))
-load_shots <- readRDS(here::here("saved_robjs/joined_shots"))
-rezoned_shots <- readRDS(here::here("saved_robjs/rezoned_shots"))
+samples <- readRDS(here::here("saved_robjs/1819/samps_moran_randeff_alphapt25sigma2525"))
+load_shots <- readRDS(here::here("saved_robjs/1819/joined_shots"))
+rezoned_shots <- readRDS(here::here("saved_robjs/1819/rezoned_shots_1819"))
 
 
 courtImg.URL <- "https://thedatagame.files.wordpress.com/2016/03/nba_court.jpg"
@@ -227,6 +228,18 @@ closest_mat
 
 
 table(imposed_samps1$relab_grps[closest_mat,])
+num_samps = dim(imposed_samps2$relab_grps)[1]
+num_clusts = c()
+for (i in 1:num_samps){
+  num_clusts[i] = dim(table(imposed_samps1$relab_grps[i,]))
+}
+for (i in 1:num_samps){
+  num_clusts[i+num_samps] = dim(table(imposed_samps2$relab_grps[i,]))
+}
+hist(num_clusts)
+var(num_clusts)
+
+length(imposed_samps1)
 
 load_shots
 
@@ -235,7 +248,25 @@ ts.plot(imposed_samps2$ord_coefs[,67])
 clust_shots <- load_shots %>% 
   add_column(cluster = imposed_samps1$relab_grps[closest_mat,]) 
 
-
+# for each cluster gather the names
+cluster_assignments = list()
+cluster_stats = list()
+for (c in 1:dim(clust_shots %>% dplyr::select(cluster) %>% unique())[1]){
+  #cluster_assignements <- append(cluster_assignments, 
+  #                              clust_shots %>% 
+  #                                filter(cluster==c) %>% 
+  #                              dplyr::select(PLAYER_NAME) %>% 
+  #                                c())
+  cluster_assignments[[paste0("cluster", c)]] = clust_shots %>% 
+    filter(cluster==c) %>% 
+    dplyr::select(PLAYER_NAME) %>% 
+    c()
+  cluster_stats[[paste0("cluster", c)]] = clust_shots %>% 
+    filter(cluster==c)
+  
+}
+write.xlsx(cluster_assignments, here::here("data/1920/clust_assignments.xls"))
+write.xlsx(cluster_stats, here::here("data/1920/clust_summary.xls"))
 
 comp_3pct <- function(all_shots){
   atts <- all_shots %>% 
@@ -358,6 +389,7 @@ clust_summary <- clust_shots %>%
   add_column(total_att = total_att)
 
 clust_summary
+
 
 pos_summary <- clust_shots %>% 
   group_by(Pos) %>% 
@@ -523,7 +555,11 @@ region_full <- c("Above Break 3 Ctr",
                  "Mid-Range Right",
                  "Right Corner 3")
 
+# precovid inds
 clust_inds <- c(2, 3, 6, 7, 8, 9, 11, 12, 13)
+
+# covid season inds
+clust_inds <- 1:7
 dens_color <- "lightsteelblue2"
 tsize <- 3
 gpsize <- 1
@@ -922,9 +958,14 @@ annotate_figure(ten_plot,
                                 color = "black", face = "bold", size = 14))
 
 
+seven_plot <- ggarrange(p1, p2, p3, 
+                      p4, p5, p6,
+                      p7,
+                      nrow=4, ncol=2, common.legend=F, align="h")
 
-
-
+annotate_figure(seven_plot, 
+                top = text_grob("Shooting Density and Zone FG%", 
+                                color = "black", face = "bold", size = 14))
 
 
 
