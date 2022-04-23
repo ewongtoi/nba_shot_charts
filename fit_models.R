@@ -9,15 +9,11 @@ library(tidyr)
 library(robustHD)
 library(igraph)
 
-<<<<<<< HEAD
+
 print(here::here("saved_robjs/joined_shots"))
 load_shots <- readRDS(here::here("/saved_robjs/1920/joined_shots_100plus_1920"))
 design_shooting <- readRDS(here::here("/saved_robjs/design_shooting"))
-=======
-#print(here::here("saved_robjs/1920/joined_shots_1920"))
-load_shots <- readRDS(here::here("saved_robjs/1819/joined_shots_100plus_1819"))
-design_shooting <- readRDS(here::here("saved_robjs/design_shooting"))
->>>>>>> 5c8f9302b76e9e7d372a01b6c93161d7f3d8a406
+
 
 player_mat <- load_shots %>% 
   dplyr::select("Exp", "Salary") %>% 
@@ -245,9 +241,8 @@ mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
 # 
 
 
-<<<<<<< HEAD
+
 saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525_100plus2"))
-=======
 
 #####----- analysis (don't run this leave it to post_proc.R)
 
