@@ -13,6 +13,16 @@ library(xtable)
 
 clust_shots <- readRDS(here::here("saved_robjs/1819/shots_with_clusters_1819"))
 
+
+
+### Curry, DeRozan, KAT plot
+vol_shots <- clust_shots %>% 
+  filter(PLAYER_NAME %in% 
+           c("Stephen Curry", "Karl-Anthony Towns", "DeMar DeRozan"))
+
+
+
+### shot density plots
 img <- readJPEG(here::here('nba_court.jpg'))
 court <- rasterGrob(img, interpolate = FALSE)
 
