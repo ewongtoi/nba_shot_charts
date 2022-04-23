@@ -10,8 +10,8 @@ library(robustHD)
 library(igraph)
 
 print(here::here("saved_robjs/joined_shots"))
-load_shots <- readRDS(here::here("saved_robjs/joined_shots"))
-design_shooting <- readRDS(here::here("saved_robjs/design_shooting"))
+load_shots <- readRDS(here::here("/saved_robjs/1920/joined_shots_100plus_1920"))
+design_shooting <- readRDS(here::here("/saved_robjs/design_shooting"))
 
 player_mat <- load_shots %>% 
   dplyr::select("Exp", "Salary") %>% 
@@ -220,10 +220,16 @@ shots_model <- nimbleModel(shots_code,
                            debug=FALSE)
  
 shots_mcmc <- buildMCMC(shots_model)
-set.seed(226)
+gc()
+
+# first seed for main analysis
+#set.seed(226)
+
+# second seed set when splitting sampling into two stages (per chain)
+set.seed(228)
 mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
                        data = data, inits = inits,
-                       nchains = 2, niter = 20000,
+                       nchains = 1, niter = 20000,
                        summary = TRUE, WAIC = FALSE,
                        monitors = c('alphas','betas', 'alpha',
                                      'mu', 'eta', 'clust',
@@ -233,7 +239,7 @@ mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
 # 
 
 
-saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525_redo"))
+saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525_100plus2"))
 
 
 #player_name <- load_shots$PLAYER_NAME

@@ -13,27 +13,37 @@ library(gridExtra)
 library(xtable)
 
 
-samples <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525_redo"))
-load_shots <- readRDS(here::here("/saved_robjs/joined_shots"))
-rezoned_shots <- readRDS(here::here("/saved_robjs/rezoned_shots"))
+samples <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525"))
+samples2 <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525_100plus2"))
+load_shots <- readRDS(here::here("/saved_robjs/1819/joined_shots"))
+rezoned_shots <- readRDS(here::here("saved_robjs/rezoned_shots"))
 
 
 
 courtImg.URL <- "https://thedatagame.files.wordpress.com/2016/03/nba_court.jpg"
-court <- rasterGrob(readJPEG(getURLContent(courtImg.URL)),
+court <- rasterGrob(readJPEG(g(courtImg.URL)),
                     width=unit(1,"npc"), height=unit(1,"npc"))
 
 n_players <- dim(load_shots)[1]
 
 # samples <- mcmc.out
 
-# gather samples
+# gather samples for 2 chains of same seed
 zsamp1 <- samples$samples$chain1[ , grep('clust', colnames(samples$samples$chain1))]
 zsamp2 <- samples$samples$chain2[ , grep('clust', colnames(samples$samples$chain2))]
 alphas1 <- samples$samples$chain1[ , grep('alphas', colnames(samples$samples$chain1))]
 alphas2 <- samples$samples$chain2[ , grep('alphas', colnames(samples$samples$chain2))]
 betas1 <- samples$samples$chain1[ , grep('betas', colnames(samples$samples$chain1))]
 betas2 <- samples$samples$chain2[ , grep('betas', colnames(samples$samples$chain2))]
+
+
+# gather samples for 2 chains from separate seeds
+zsamp1 <- samples$samples[ , grep('clust', colnames(samples$samples))]
+zsamp2 <- samples2$samples[ , grep('clust', colnames(samples2$samples))]
+alphas1 <- samples$samples[ , grep('alphas', colnames(samples$samples))]
+alphas2 <- samples2$samples[ , grep('alphas', colnames(samples2$samples))]
+betas1 <- samples$samples[ , grep('betas', colnames(samples$samples))]
+betas2 <- samples2$samples[ , grep('betas', colnames(samples2$samples))]
 
 alphas1[1,which(names(alphas1[1,]) %in% c("alphas[1, 1]", "alphas[1, 2]", "alphas[1, 3]", "alphas[1, 4]", "alphas[1, 5]"))]
 indices <- which(names(betas1[1,]) %in% c("betas[1, 1]", "betas[1, 2]", "betas[1, 3]", "betas[1, 4]", "betas[1, 5]"))
@@ -144,10 +154,11 @@ impose_order_multi <- function(c_smps_mat, c_smps_mat2, mmbr_mat, indices){
 
 summary(samples)
 
+# for one seed
 param_nm <- rownames(samples$summary$all.chains)
 
-
-
+# for two seeds
+param_nm <- rownames(samples$summary)
 
 #imposed_samps1 <- impose_order(alphas1[2001:10000,], betas1[2001:10000,], zsamp1[2001:10000,])
 #imposed_samps2 <- impose_order(alphas2[2001:10000,], betas2[2001:10000,], zsamp2[2001:10000,])
@@ -200,9 +211,14 @@ for(z in 1:N){
   if(z/1000 == 0){
     print(z)
   }
-  l[[z]] <- make_adj_mat(imposed_samps1$relab_grps[z,])
-  l2[[z]] <- make_adj_mat(imposed_samps2$relab_grps[z,])
-  sum_mat <- l[[z]] + l2[[z]] + sum_mat
+  #l[[z]] <- make_adj_mat(imposed_samps1$relab_grps[z,])
+  #l2[[z]] <- make_adj_mat(imposed_samps2$relab_grps[z,])
+  
+  # redone wehre we don't save intermediate steps for sake of memory
+  l <- make_adj_mat(imposed_samps1$relab_grps[z,])
+  l2 <- make_adj_mat(imposed_samps2$relab_grps[z,])
+  
+  sum_mat <- l + l2 + sum_mat
 }
 
 
@@ -211,12 +227,16 @@ mean_mat <- sum_mat/(2*N)
 dists <- rep(0, 2*N)
 for(z in 1:N){
   
-  diff <- mean_mat - l[[z]]
+  #diff <- mean_mat - l[[z]]
+  diff <- mean_mat - make_adj_mat(imposed_samps1$relab_grps[z,])
+  
   ss <- mean(diff^2)
   dists[z] = ss
 
   
-  diff <- mean_mat - l2[[z]]
+  #diff <- mean_mat - l2[[z]]
+  diff <- mean_mat - make_adj_mat(imposed_samps2$relab_grps[z,])
+  
   ss <- mean(diff^2)
   dists[z + N] = ss
 }
@@ -227,16 +247,24 @@ image(t(mean_mat))
 closest_mat <- which.min(dists)
 closest_mat
 
-
+# for 100+ 2018/19 it's index 18707; 3707 in the second chain
+# for original 167 players index 147; 147 in first chain
 table(imposed_samps1$relab_grps[closest_mat,])
 
 load_shots
 
+
+# plot of num_clust
+
+
 ts.plot(imposed_samps2$ord_coefs[,67])
 
+### UPDATE THIS BASED OFF WHERE THE CLOSEST MAT IS
 clust_shots <- load_shots %>% 
   add_column(cluster = imposed_samps1$relab_grps[closest_mat,]) 
 
+
+saveRDS(clust_shots, here::here("/saved_robjs/shots_with_clusters_1819"))
 
 
 comp_3pct <- function(all_shots){
@@ -314,6 +342,9 @@ three_att_posall <- rep(0, times = 5)
 total_pct_posall <- rep(0, times = 5)
 total_att_posall <- rep(0, times = 5)
 positions <- c("PG", "SG", "SF", "PF", "C")
+
+all_joined <- load_shots
+
 for(ps in 1:5){
   cl <- positions[ps]
   
@@ -381,7 +412,7 @@ pos_summary <- clust_shots %>%
 pct_att3 <- comp_3pct(clust_shots)
 pct_att <- comp_fgpct(clust_shots)
 
-marg_stats <- c("all", 167, mean(clust_shots$Ht_in), sd(clust_shots$Ht_in), 
+marg_stats <- c("all", n_players, mean(clust_shots$Ht_in), sd(clust_shots$Ht_in), 
   mean(clust_shots$Wt), sd(clust_shots$Wt), 
   mean(clust_shots$Salary/1000000), sd(clust_shots$Salary/1000000),
   mean(clust_shots$Exp), sd(clust_shots$Exp), 
@@ -425,9 +456,9 @@ pos_summ_combo_all <- rbind(all_pos_summary, marg_stats)
 clust_dem <- clust_summary %>% select(1:10)
 clust_sh <- clust_summary %>% select(c(1, 12:15))
 
-write.csv(clust_summary, here::here("/data/FINALcluster_summary.csv"))
+write.csv(clust_summary, here::here("/data/FINALcluster_summary100plus.csv"))
 
-write.csv(clust_shots %>% arrange(cluster) %>% dplyr::select(c(PLAYER_NAME, cluster)), here::here("data/FINALplayer_assignments.csv"))
+write.csv(clust_shots %>% arrange(cluster) %>% dplyr::select(c(PLAYER_NAME, cluster)), here::here("data/FINALplayer_assignments100plus.csv"))
 
 load_shots %>% dplyr::select(which(str_detect(colnames(load_shots), "attempt|pct")==TRUE)) %>% names() 
 
