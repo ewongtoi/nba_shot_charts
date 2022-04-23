@@ -7,22 +7,33 @@ library(rvest)
 library(here)
 library(stringi)
 
+### double check folder structure ###
+
 
 # player info (ht, wt, etc) -----------------------------------------------
 # txt of https://www.basketball-reference.com/leagues/NBA_2019_shooting.html
-nba_reg <- read_csv(here("/data/nba_ref_summary.txt"))
+# or maybe(?)
+# txt of https://www.basketball-reference.com/leagues/NBA_2020_shooting.html
+nba_reg <- read_csv(here("data/nba_ref_summary_20.txt"))
 
+# all team abbreviations, but want to cut out TOT (total) and Tm (team)
 team_abbrv <- nba_reg %>% select(5) %>% unique() %>% slice(c(2:14, 16:32))
+team_abbrv <- nba_reg %>%
+  select(5) %>% 
+  unique() %>% 
+  rename_with(.cols=1, ~"tm_ab") %>% 
+  filter(!(tm_ab %in% c("TOT", "Tm")))
 
 paths_allowed("https://www.basketball-reference.com")
 
 player_info <- matrix(0, nrow = 1, ncol = 9)
 
 for(t in 1:30) {
-
+  
+  # update to appropriate year
   new_url <- paste0("https://www.basketball-reference.com/teams/", 
                     slice(team_abbrv, t), 
-                    "/2019.html")
+                    "/2020.html")
 
   team_page <- read_html(new_url)
   
@@ -54,9 +65,9 @@ player_tib <- player_tib %>%
 
 
 # salary ------------------------------------------------------------------
-paths_allowed("https://hoopshype.com/salaries/players/2018-2019/")
+paths_allowed("https://hoopshype.com/salaries/players/2019-2020/")
 
-sal_page <- read_html("https://hoopshype.com/salaries/players/2018-2019/")
+sal_page <- read_html("https://hoopshype.com/salaries/players/2019-2020/")
 sal_page %>% 
   html_nodes(".hh-salaries-sorted , .name") %>% 
   html_text() %>% 
@@ -65,8 +76,9 @@ sal_page %>%
 sal_page %>% 
   html_nodes(".name") %>% 
   html_text()
-  
-sal_data <- read_delim(here("salary_data_1819.txt"), "\t") %>% 
+
+# update to year
+sal_data <- read_delim(here("data/salary_data_1920.txt"), "\t") %>% 
   select(2:3)
 colnames(sal_data) <- c("Player", "Salary")
 
@@ -84,5 +96,5 @@ joined_inf <- left_join(sal_data, player_tib, by=c("Player" = "Player")) %>%
 View(joined_inf)
 dim(joined_inf)
 
-saveRDS(joined_inf, here("salary_plus"))
+saveRDS(joined_inf, here("saved_robjs/salary_plus_1920"))
 

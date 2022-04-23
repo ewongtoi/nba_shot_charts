@@ -16,10 +16,10 @@ library(grid)
 library(jpeg)
 
 # load data ---------------------------------------------------------------
-
-shots <- read_csv("data/my_nba_shotchartdetail_2018-19.csv")
+# check for years
+shots <- read_csv(here::here("data/1920/my_nba_shotchartdetail_2019-20.csv"))
 shots
-shots1 <- read_csv("data/nba_shotchartdetail_2018-191.csv")
+shots <- read_csv(here::here("data/1819/nba_shotchartdetail_2018-191.csv"))
 shots
 
 post_shots <- read_csv("nba_shotchartdetail_2018-19_postseason.csv")
@@ -41,7 +41,7 @@ rezoned_shots <- shots %>%
                        SHOT_ZONE_BASIC, 
                        paste(SHOT_ZONE_BASIC, SHOT_ZONE_AREA)))
 
-saveRDS(rezoned_shots, here::here("/saved_robjs/rezoned_shots"))
+saveRDS(rezoned_shots, here::here("saved_robjs/1819/rezoned_shots_1819"))
 
 # visualize zones ---------------------------------------------------------
 # half court image
@@ -174,7 +174,8 @@ cbind(c(1, 2, 3), c(43, 5, 2)) %>% bs()
 
 wide_rezoned_shots_nobc <- wide_rezoned_shots %>% 
   dplyr::select(!contains("bc")) %>% 
-  filter_at((vars(ends_with("attempt"))), all_vars(. > 3)) 
+  #filter_at((vars(ends_with("attempt"))), all_vars(. > 3)) 
+  filter(total_attempts > 100)
 
 
 all_rezoned_shots_nobc <- wide_rezoned_shots %>% 
@@ -182,7 +183,7 @@ all_rezoned_shots_nobc <- wide_rezoned_shots %>%
 
 dim(wide_rezoned_shots_nobc)
 
-"Timothe Luwawu-Cabarrot" %in% wide_rezoned_shots$PLAYER_NAME
+"Giannis Antetokounmpo" %in% wide_rezoned_shots$PLAYER_NAME
 
 str_ht_to_in <- function(str_ht){
   ret_vec <- rep(0, times=length(str_ht))
@@ -199,8 +200,8 @@ str_ht_to_in <- function(str_ht){
   return(ret_vec)
 }
 
-
-joined_inf <- readRDS(here::here("/saved_robjs/salary_plus"))
+## CHCEK PATH
+joined_inf <- readRDS(here::here("saved_robjs/1819/salary_plus"))
 
 
 joined_shots <- left_join(wide_rezoned_shots_nobc, joined_inf, 
@@ -280,16 +281,16 @@ eta_ests <- joined_shots %>%
 
 View(eta_ests)
 View(mu_ests)
-saveRDS(joined_shots, here::here("/saved_robjs/joined_shots"))
+saveRDS(joined_shots, here::here("saved_robjs/1819/joined_shots_100plus_1920"))
 saveRDS(design_shooting, here("/saved_robjs/design_shooting"))
-saveRDS(wide_rezoned_shots_nobc, here("/saved_robjs/wide_rezoned_nobc"))
+saveRDS(wide_rezoned_shots_nobc, here("saved_robjs/1819/wide_rezoned_nobc_100plus_1920"))
 #saveRDS(mu_ests, here("/saved_robjs/mu_ests"))
 #saveRDS(eta_ests, here("/saved_robjs/eta_ests"))
 
 #write_csv(eta_ests, here("/data/eta_ests.csv"))
 #write_csv(mu_ests, here("/data/mu_ests.csv"))
-write_csv(joined_shots, here::here("/data/joined_shots.csv"))
-write_csv(joined_shots_full, here("/data/joined_shots_full.csv"))
+write_csv(joined_shots, here::here("data/1920/joined_shots_1920.csv"))
+write_csv(joined_shots_full, here("data/1920/joined_shots_full_1920.csv"))
 
 # wide_rezoned_shots_nobc <- readRDS(here("wide_rezoned_nobc"))
 view(joined_shots_full)

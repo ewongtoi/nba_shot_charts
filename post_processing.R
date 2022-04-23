@@ -253,8 +253,16 @@ table(imposed_samps1$relab_grps[closest_mat,])
 
 load_shots
 
-
+num_clusts <- rep(0, 2*N)
 # plot of num_clust
+for(z in 1:N){
+  
+
+  num_clusts[z] <- dim(table(imposed_samps1$relab_grps[z,]))
+  
+
+  num_clusts[z + N] <- dim(table(imposed_samps2$relab_grps[z,]))
+}
 
 
 ts.plot(imposed_samps2$ord_coefs[,67])

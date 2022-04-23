@@ -9,9 +9,15 @@ library(tidyr)
 library(robustHD)
 library(igraph)
 
+<<<<<<< HEAD
 print(here::here("saved_robjs/joined_shots"))
 load_shots <- readRDS(here::here("/saved_robjs/1920/joined_shots_100plus_1920"))
 design_shooting <- readRDS(here::here("/saved_robjs/design_shooting"))
+=======
+#print(here::here("saved_robjs/1920/joined_shots_1920"))
+load_shots <- readRDS(here::here("saved_robjs/1819/joined_shots_100plus_1819"))
+design_shooting <- readRDS(here::here("saved_robjs/design_shooting"))
+>>>>>>> 5c8f9302b76e9e7d372a01b6c93161d7f3d8a406
 
 player_mat <- load_shots %>% 
   dplyr::select("Exp", "Salary") %>% 
@@ -239,7 +245,16 @@ mcmc.out <- nimbleMCMC(code = shots_code, constants = constants,
 # 
 
 
+<<<<<<< HEAD
 saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525_100plus2"))
+=======
+
+#####----- analysis (don't run this leave it to post_proc.R)
+
+
+
+saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525_redo"))
+>>>>>>> 5c8f9302b76e9e7d372a01b6c93161d7f3d8a406
 
 
 #player_name <- load_shots$PLAYER_NAME
@@ -263,10 +278,10 @@ saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525_100p
 
 #view(mcmcout_tib)
 #View(mcmcout_median_ab)
-#mcmcout_tib
-#as.numeric(str_extract("[23,", "(?<=\\[)(.*?)(?=,)"))
 
-#plot(mcmc.outiw$samples$chain1[1:10000, 180])
+#mcmcout_tib
+
+plot(mcmc.out$samples$chain1[1:10000, 180])
 
 # write.csv(mcmcout_median_ab2, "mcmc_medians_ab2.csv")
 # unsure if this works (paralllel) ----------------------------------------
@@ -303,62 +318,62 @@ saveRDS(mcmc.out, here("/saved_robjs/samps_moran_randeff_alphapt25sigma2525_100p
 #                  max_treedepth = 12)
 # )
 
-# zsamp1 <- mcmc.out$samples$chain1[ , grep('clust', colnames(mcmc.out$samples$chain1))]
-# zsamp2 <- mcmc.out$samples$chain2[ , grep('clust', colnames(mcmc.out$samples$chain2))]
-# zsamptot <- rbind(zsamp1, zsamp2)
-# clust_count <- rep(0, times=30000)
-# for(i in 1:15000){
-#   clust_count[i] <- length(unique(zsamp1[i+5000, ]))
-#   clust_count[i+ 15000] <- length(unique(zsamp2[i+5000, ]))
-# }
+zsamp1 <- mcmc.out$samples$chain1[ , grep('clust', colnames(mcmc.out$samples$chain1))]
+zsamp2 <- mcmc.out$samples$chain2[ , grep('clust', colnames(mcmc.out$samples$chain2))]
+zsamptot <- rbind(zsamp1, zsamp2)
+clust_count <- rep(0, times=30000)
+for(i in 1:15000){
+   clust_count[i] <- length(unique(zsamp1[i+5000, ]))
+   clust_count[i+ 15000] <- length(unique(zsamp2[i+5000, ]))
+}
 
 
 
-# make_adj_mat_grp <- function(member_list){
-#   n <- length(member_list)
+make_adj_mat_grp <- function(member_list){
+   n <- length(member_list)
   
-#   adj_mat <- matrix(0, nrow=n, ncol=n)
+   adj_mat <- matrix(0, nrow=n, ncol=n)
   
-#   for(i in 1:n){
-#     adj_mat[,i] = (member_list == member_list[i]) * member_list[i]
-#   }
+   for(i in 1:n){
+     adj_mat[,i] = (member_list == member_list[i]) * member_list[i]
+   }
   
-#   rownames(adj_mat) <- player_names[[1]]
-#   colnames(adj_mat) <- player_names[[1]]
+   rownames(adj_mat) <- player_names[[1]]
+   colnames(adj_mat) <- player_names[[1]]
   
   
-#   return(adj_mat)
+   return(adj_mat)
   
-# }
+}
 
 
 
 
-# N <- 16000
-# l <- vector("list", N)
+N <- 16000
+l <- vector("list", N)
 
-# sum_mat <- matrix(0, n_players, n_players)
-# for(z in 1:8000){
-#   l[[z]] <- make_adj_mat(zsamp1[z+2000, ])
-#   l[[z + 8000]] <- make_adj_mat(zsamp2[z+2000, ])
+sum_mat <- matrix(0, n_players, n_players)
+for(z in 1:8000){
+  l[[z]] <- make_adj_mat(zsamp1[z+2000, ])
+  l[[z + 8000]] <- make_adj_mat(zsamp2[z+2000, ])
   
-#   sum_mat <- l[[z]] + l[[z + 8000]] + sum_mat
-# }
+  sum_mat <- l[[z]] + l[[z + 8000]] + sum_mat
+}
 
 
 # mean_mat <- sum_mat/16000
 
 
-# close_mat <- l[[1]]
+close_mat <- l[[1]]
 
-# min_dist <- 10000
-# dists <- rep(0, 16000)
-# for(z in 1:16000){
-  
-#   diff <- mean_mat - l[[z]]
-#   ss <- mean(diff^2)
-#   dists[z] = ss
-# }
+min_dist <- 10000
+dists <- rep(0, 16000)
+for(z in 1:16000){
+
+  diff <- mean_mat - l[[z]]
+  ss <- mean(diff^2)
+  dists[z] = ss
+}
 
 
 print("done")
