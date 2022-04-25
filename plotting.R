@@ -11,7 +11,7 @@ library(RCurl)
 library(gridExtra)
 library(xtable)
 
-clust_shots <- readRDS(here::here("saved_robjs/1819/shots_with_clusters_1819"))
+clust_shots <- readRDS(here::here("saved_robjs/shots_with_clusters_1920"))
 
 
 
