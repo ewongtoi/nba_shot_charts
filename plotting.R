@@ -10,8 +10,10 @@ library(jpeg)
 library(RCurl)
 library(gridExtra)
 library(xtable)
+library(ggpubr)
+library(patchwork)
 
-clust_shots <- readRDS(here::here("saved_robjs/shots_with_clusters_1920"))
+clust_shots <- readRDS(here::here("saved_robjs/1920/shots_with_clusters_1920"))
 
 
 
@@ -75,8 +77,8 @@ region_full <- c("Above Break 3 Ctr",
 
 
 ### UPDATE THIS
-clust_inds <- c(2, 3, 6, 7, 8, 9, 11, 12, 13)
-dens_color <- "lightsteelblue2"
+clust_inds <- c(1, 2, 3, 4, 5, 6, 7, 8)
+dens_color <- "black"
 tsize <- 3
 gpsize <- 1
 gpshape <- 16
@@ -450,3 +452,26 @@ p9 <- ggplot(data=data9, aes(x=-mean_x, y=mean_y), color=zone) +
         plot.title = element_text(size = 12, lineheight = 1)) +
   geom_density_2d(data=dens_data9,aes(x=-LOC_X, y=LOC_Y), color=dens_color)
 
+eight_plot <- ggarrange(p1, p2, p3, p4, p5, p6, p7, p8,
+                      nrow=4, ncol=2, common.legend=F, align="h")
+
+
+row1 <-  ggarrange(p1, p2, p3,
+                   nrow=1, ncol=3, common.legend=F, align="h")
+row2 <-  ggarrange( p4, p5, p6,
+                   nrow=1, ncol=3, common.legend=F, align="h")
+row3 <-  ggarrange(p7, p8,
+                   nrow=1, ncol=2, common.legend=F, align="h")
+
+combo <- ggarrange(row1, row2, row3, nrow=3, ncol=1, common.legend = F, aligh="h")
+
+
+
+annotate_figure(p1+p2+p3+p4+p5+p6+p7+p8, 
+                top = text_grob("Shooting Density and Zone FG%", 
+                                color = "black", face = "bold", size = 14))
+
+
+p1+p2+p3+p4+p5+p6+p7+p8 + plot_annotation(
+  title = "Shooting Density and Zone FG%",
+)

@@ -13,10 +13,10 @@ library(gridExtra)
 library(xtable)
 
 
-samples <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525"))
+samples <- readRDS(here::here("saved_robjs/1920/samps_moran_randeff_alphapt25sigma2525_1920"))
 samples2 <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525_100plus2"))
-load_shots <- readRDS(here::here("/saved_robjs/1819/joined_shots"))
-rezoned_shots <- readRDS(here::here("saved_robjs/rezoned_shots"))
+load_shots <- readRDS(here::here("/saved_robjs/1920/joined_shots_1920"))
+rezoned_shots <- readRDS(here::here("saved_robjs/1920/rezoned_shots_1920"))
 
 
 
@@ -249,6 +249,7 @@ closest_mat
 
 # for 100+ 2018/19 it's index 18707; 3707 in the second chain
 # for original 167 players index 147; 147 in first chain
+# closest matt for strict 1920 set is 5789
 table(imposed_samps1$relab_grps[closest_mat,])
 
 load_shots
@@ -272,7 +273,7 @@ clust_shots <- load_shots %>%
   add_column(cluster = imposed_samps1$relab_grps[closest_mat,]) 
 
 
-saveRDS(clust_shots, here::here("/saved_robjs/shots_with_clusters_1819"))
+saveRDS(clust_shots, here::here("/saved_robjs/1920/shots_with_clusters_1920"))
 
 
 comp_3pct <- function(all_shots){
