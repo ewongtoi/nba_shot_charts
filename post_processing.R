@@ -13,10 +13,11 @@ library(gridExtra)
 library(xtable)
 
 
-samples <- readRDS(here::here("saved_robjs/1920/samps_moran_randeff_alphapt25sigma2525_1920"))
+samples <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525_100plus"))
 samples2 <- readRDS(here::here("saved_robjs/samps_moran_randeff_alphapt25sigma2525_100plus2"))
-load_shots <- readRDS(here::here("/saved_robjs/1920/joined_shots_1920"))
-rezoned_shots <- readRDS(here::here("saved_robjs/1920/rezoned_shots_1920"))
+load_shots <- readRDS(here::here("/saved_robjs/1819/joined_shots_100plus_1819"))
+rezoned_shots <- readRDS(here::here("saved_robjs/rezoned_shots"))
+design_shooting <- readRDS(here::here("/saved_robjs/design_shooting12x5"))
 
 
 
@@ -167,6 +168,103 @@ param_nm <- rownames(samples$summary)
 imposed_samps1 <- impose_order_multi(alphas1[5001:20000,], betas1[5001:20000,], zsamp1[5001:20000,], indices)
 imposed_samps2 <- impose_order_multi(alphas2[5001:20000,], betas2[5001:20000,], zsamp2[5001:20000,], indices)
 
+ordered_alphas <- rbind(imposed_samps1$ord_coefs, imposed_samps2$ord_coefs)
+ordered_betas <- rbind(imposed_samps1$ord_coefs2, imposed_samps2$ord_coefs2)
+
+
+# CI's by cluster -------------------
+max_clust <- 19
+
+lb <- matrix(0, nrow=max_clust, ncol=12)
+ub <- matrix(0, nrow=max_clust, ncol=12)
+mdn <- matrix(0, nrow=max_clust, ncol=12)
+mn <- matrix(0, nrow=max_clust, ncol=12)
+
+lb2 <- matrix(0, nrow=max_clust, ncol=12)
+ub2 <- matrix(0, nrow=max_clust, ncol=12)
+mdn2 <- matrix(0, nrow=max_clust, ncol=12)
+mn2 <- matrix(0, nrow=max_clust, ncol=12)
+
+for (i in 1:max_clust){
+  inds <- indices + (i-1)
+
+  mus <- design_shooting  %*% t(ordered_betas[,inds])  
+  etas <- design_shooting  %*% t(ordered_alphas[,inds])
+
+  
+  
+  for (z in 1:12){
+    lb[i, z] <- quantile(mus[z, ], 0.025)
+    ub[i, z] <- quantile(mus[z, ], 0.975)
+    mdn[i, z] <- quantile(mus[z, ], 0.5)
+    mn[i, z] <- mean(mus[z,])
+    
+    lb1[i, z] <- quantile(etas[z, ], 0.025)
+    ub1[i, z] <- quantile(etas[z, ], 0.975)
+    mdn1[i, z] <- quantile(etas[z, ], 0.5)
+    mn1[i, z] <- mean(etas[z,])
+    
+    
+  }
+  
+}
+
+regions <- c("Above the Break 3 Center", 
+             "Above the Break 3 Left Center",
+             "Above the Break 3 Right Center",
+             "Paint",
+             "Left Corner 3",
+             "Midrange Center",
+             "Midrange Left Center",
+             "Midrange Left",
+             "Midrange Right Center",
+             "Midrange Right",
+             "Restricted Area",
+             "Right Corner 3")
+
+construct_table <- function(lb, ub, mdn, mn, lb2, ub2, mdn2, mn2, cl){
+  cnms <- c("Region", 
+            "Median", "Mean", "95% CI", 
+            "Median", "Mean", "95% CI")
+  
+  cis <- rep(0, 12)
+  
+  for (z in 1:12) {
+    cis[z] <- paste0("(", round(lb[cl, z], 2), ", ", round(ub[cl, z], 2), ")")
+  }
+  
+  cis2 <- rep(0, 12)
+  
+  for (z in 1:12) {
+    cis2[z] <- paste0("(", round(lb2[cl, z], 2), ", ", round(ub2[cl, z], 2), ")")
+  }
+  
+  ret_tab <- cbind(regions, 
+                   round(mdn[cl,], 2), round(mn[cl, ], 2), cis, 
+                   round(mdn2[cl,], 2), round(mn2[cl, ], 2), cis2)
+  
+  
+  colnames(ret_tab) <- cnms
+  
+  return(ret_tab)
+  
+}
+
+
+
+for (cl in 1:max_clust){
+  mycaption <- paste0("2018-19 100+ Cluster ", cl)
+  print(xtable(construct_table(lb, ub, mdn, mn, cl), caption=mycaption), include.rownames = F)
+}
+
+
+
+
+
+
+
+#saveRDS(ordered_alphas, here::here("saved_robjs/1819/ordered_alphas_359"))
+#saveRDS(ordered_betas, here::here("saved_robjs/1819/ordered_betas_359"))
 
 make_adj_mat <- function(member_list){
   n <- length(member_list)
@@ -465,6 +563,10 @@ pos_summ_combo_all <- rbind(all_pos_summary, marg_stats)
 clust_dem <- clust_summary %>% select(1:10)
 clust_sh <- clust_summary %>% select(c(1, 12:15))
 
+# arrange it nicer
+xtable(clust_dem[c(1, 6, 2:5, 7:10)])
+xtable(clust_sh)
+
 write.csv(clust_summary, here::here("/data/FINALcluster_summary100plus.csv"))
 
 write.csv(clust_shots %>% arrange(cluster) %>% dplyr::select(c(PLAYER_NAME, cluster)), here::here("data/FINALplayer_assignments100plus.csv"))
@@ -485,7 +587,10 @@ clust_to_row <- function(nms){
   temp <- paste(nms, '& ')
   paste(temp, collapse = "")
 }
-clust_to_row(pnms[which(imposed_samps1$relab_grps[closest_mat, ]==1)])
+clust_to_row(pnms[which(imposed_samps1$relab_grps[closest_mat, ]==3)])
+
+
+
 
 clust_shots %>% 
   arrange(cluster) %>% 
