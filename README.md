@@ -1,9 +1,5 @@
 # nba_shot_charts
 
-### fit_cluster.R
-Script to fit models on the cluster
-
-
 ### fit_models.R
 Script to fit model (original that was written to run locally)
 
